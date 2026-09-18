@@ -93,6 +93,18 @@ export function weekMode(d) {
 }
 
 /**
+ * Auto-refresh cadence. During an in-progress game window the payload may be
+ * up to five minutes old and the client polls every two minutes; otherwise the
+ * hourly Worker cron keeps data within an hour and the client re-reads
+ * (cheaply, from cache) every fifteen minutes.
+ */
+export function refreshWindow(d) {
+  const live = d.week_mode?.mode === "live" ||
+    (d.next_week?.status === "in_progress" && (d.next_week?.games || []).length > 0);
+  return { live, poll_ms: live ? 120000 : 900000 };
+}
+
+/**
  * True while the upcoming slate features Emery's Hash Browns vs. Tuten Hurts.
  * This is the week gate for the "Baker decree" league-banter lead story: the
  * matchup only exists in `next_week` during that week, so the article and its

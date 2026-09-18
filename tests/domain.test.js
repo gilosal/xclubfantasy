@@ -9,6 +9,7 @@ import {
   scoreOf,
   pairGames,
   buildEditorial,
+  refreshWindow,
 } from "../src/domain.js";
 
 test("Sleeper decimal component is hundredths, including leading zero and zero integer", () => {
@@ -111,4 +112,25 @@ test("tied games do not produce a fictional winner", () => {
     false,
   );
   assert.ok(buildEditorial(d).every((a) => !a.body.includes("undefined")));
+});
+test("refresh window: live game window polls every 2 minutes, otherwise 15", () => {
+  const game = { a: { rid: 1, team: "A", pts: 10 }, b: { rid: 2, team: "B", pts: 5 } };
+  const live = refreshWindow({
+    week_mode: { mode: "live", week: 3 },
+    next_week: { status: "in_progress", games: [game] },
+  });
+  assert.equal(live.live, true);
+  assert.equal(live.poll_ms, 120000);
+  const off = refreshWindow({
+    week_mode: { mode: "preview" },
+    next_week: { status: "upcoming", games: [game] },
+  });
+  assert.equal(off.live, false);
+  assert.equal(off.poll_ms, 900000);
+});
+test("refresh window: in_progress status with games is live even without week_mode", () => {
+  const game = { a: { rid: 1 }, b: { rid: 2 } };
+  assert.equal(refreshWindow({ next_week: { status: "in_progress", games: [game] } }).live, true);
+  assert.equal(refreshWindow({ next_week: { status: "in_progress", games: [] } }).live, false);
+  assert.equal(refreshWindow({}).poll_ms, 900000);
 });

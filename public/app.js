@@ -615,7 +615,7 @@ function render(d) {
     `${d.league.size} TEAMS · ${d.league.scoring.toUpperCase()} · ${d.league.qb}`;
   $("freshness").textContent = `Updated ${date(d.asof)} ET`;
   $("buildInfo").textContent =
-    `Build ${d.build} · League data refreshed hourly. Player metadata ${d.player_metadata_asof ? date(d.player_metadata_asof) + " ET" : "timestamp unavailable"}.`;
+    `Build ${d.build} · League data refreshes automatically (about every 5 minutes during game days, hourly otherwise). Player metadata ${d.player_metadata_asof ? date(d.player_metadata_asof) + " ET" : "timestamp unavailable"}.`;
   $("methodology").innerHTML =
     Object.entries(d.methodology)
       .map(
@@ -684,6 +684,7 @@ async function loadData(force = false) {
       if (previousData) render(previousData);
       throw error;
     }
+    scheduleAutoRefresh();
   } catch (e) {
     if (DATA) {
       $("notice").textContent =
@@ -705,6 +706,81 @@ async function loadData(force = false) {
 }
 $("refreshBtn").addEventListener("click", () => loadData(true));
 $("retryBtn").addEventListener("click", () => loadData(true));
+// ---- Silent auto-refresh ----
+// The payload carries refresh_window: ~2 min while a game window is live,
+// 15 min otherwise. We re-fetch only when the page is visible, nothing is
+// open/being typed, and the user is on a plain view (deep #game/#team/#story
+// routes re-render with a scroll jump, so we wait for a navigation instead).
+let autoTimer = null;
+function scheduleAutoRefresh() {
+  if (autoTimer) clearTimeout(autoTimer);
+  const ms = Number.isFinite(DATA?.refresh_window?.poll_ms)
+    ? DATA.refresh_window.poll_ms
+    : 900000;
+  autoTimer = setTimeout(tickAuto, ms);
+}
+function idleForAutoRefresh() {
+  if (loading || !DATA) return false;
+  if (document.hidden) return false;
+  if ($("articleDialog").open) return false;
+  const ae = document.activeElement;
+  if (ae && ["INPUT", "SELECT", "TEXTAREA"].includes(ae.tagName)) return false;
+  const h = location.hash.slice(1);
+  return !(h.startsWith("game/") || h.startsWith("team/") || h.startsWith("story/"));
+}
+async function tickAuto() {
+  if (!idleForAutoRefresh()) return scheduleAutoRefresh();
+  const before = DATA.asof;
+  let d;
+  try {
+    const r = await fetch(`/api/data?refresh=1`, {
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!r.ok) throw new Error("http " + r.status);
+    d = await r.json();
+  } catch {
+    return scheduleAutoRefresh();
+  }
+  if (!usableData(d) || d.asof === before) return scheduleAutoRefresh();
+  // Preserve the player directory's in-progress filters across the refresh so
+  // a background update doesn't wipe the user's search/sort.
+  let saved = null;
+  if (currentView === "players") {
+    saved = {
+      q: $("playerSearch")?.value || "",
+      pos: $("positionFilter")?.value || "",
+      avail: $("availabilityFilter")?.value || "",
+      owner: $("ownerFilter")?.value || "",
+      sort: $("playerSort")?.value || "proj",
+      limit: playerLimit,
+    };
+  }
+  try {
+    DATA = d;
+    render(d);
+  } catch {
+    return scheduleAutoRefresh();
+  }
+  if (saved) {
+    const set = (id, v) => {
+      const el = $(id);
+      if (el) el.value = v;
+    };
+    set("playerSearch", saved.q);
+    set("positionFilter", saved.pos);
+    set("availabilityFilter", saved.avail);
+    set("ownerFilter", saved.owner);
+    set("playerSort", saved.sort);
+    playerLimit = saved.limit;
+    filterPlayers();
+  }
+  scheduleAutoRefresh();
+}
+// Coming back to a backgrounded tab: re-check right away if the data is
+// already stale enough to be worth a fetch.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && idleForAutoRefresh() && DATA && Date.now() - DATA.asof > 60000) tickAuto();
+});
 // ---- Theme toggle (Day / Night Edition) ----
 (function initTheme() {
   const btn = $("themeBtn");

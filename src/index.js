@@ -18,13 +18,14 @@ import {
   weekendHype,
   weekendNarrative,
   featuredMatchup,
+  refreshWindow,
   ogMeta,
   buildEditorial,
 } from "./domain.js";
 
 const LID = "1371971946459201536";
 const API = "https://api.sleeper.app/v1";
-const BUILD = "2026-09-17.2";
+const BUILD = "2026-09-17.3";
 const ORIGIN = "https://xclubfantasy.robsplex.com";
 const escAttr = (s) =>
   String(s ?? "").replace(
@@ -39,6 +40,19 @@ const BUNDLE_KEY_VERSION = String(BUNDLE.generated_at || "unknown").replace(
   "",
 );
 const CACHE_KEY = `payload:v4-${BUILD}-${BUNDLE_KEY_VERSION}`;
+// Live game windows refresh on a much faster cadence than the rest of the
+// season: the cached payload is only trusted for five minutes, and a client
+// ?refresh=1 request can force a Sleeper rebuild every five minutes (instead
+// of ten). Outside game windows the hourly cron keeps the data fresh enough.
+const LIVE_TTL_MS = 5 * 60000;
+const LIVE_FORCE_MIN_MS = 5 * 60000;
+const DAY_TTL_MS = 3600000;
+const DAY_FORCE_MIN_MS = 600000;
+const isLivePayload = (p) =>
+  !!p &&
+  (p.week_mode?.mode === "live" ||
+    (p.next_week?.status === "in_progress" &&
+      (p.next_week?.games || []).length > 0));
 const norm = (pid) => String(pid ?? "").replace(/^TEAM_/, "");
 const image = (pid) =>
   /^\d+$/.test(pid) && pid !== "0"
@@ -564,9 +578,18 @@ async function homeHtml(env, url) {
 }
 
 let building;
-async function getPayload(env, ctx, { force = false } = {}) {
+async function getPayload(env, ctx, { forceRequested = false } = {}) {
   const hit = await env.XCF_KV.get(CACHE_KEY, "json");
-  if (hit && !force && Date.now() - hit.asof < 3600000) return hit;
+  // A cached payload is only as good as its freshness window. During a live
+  // game window that's five minutes; otherwise an hour (the hourly cron keeps
+  // it current). A forced refresh (manual button or ?refresh=1) is throttled
+  // so we don't hammer the Sleeper API — again, shorter while games are live.
+  const live = isLivePayload(hit);
+  const ttl = live ? LIVE_TTL_MS : DAY_TTL_MS;
+  const minSinceBuild = live ? LIVE_FORCE_MIN_MS : DAY_FORCE_MIN_MS;
+  const lastBuild = Number(hit?.asof || 0);
+  const force = forceRequested && Date.now() - lastBuild > minSinceBuild;
+  if (hit && !force && Date.now() - hit.asof < ttl) return hit;
   try {
     if (!building)
       building = buildPayload().finally(() => {
@@ -604,13 +627,12 @@ export default {
           headers: { Allow: "GET, HEAD" },
         });
       try {
-        const ts = Number((await env.XCF_KV.get("last_build_ts")) || 0);
         const payload = await getPayload(env, ctx, {
-          force:
-            url.searchParams.get("refresh") === "1" && Date.now() - ts > 600000,
+          forceRequested: url.searchParams.get("refresh") === "1",
         });
+        const body = { ...payload, refresh_window: refreshWindow(payload) };
         return new Response(
-          req.method === "HEAD" ? null : JSON.stringify(payload),
+          req.method === "HEAD" ? null : JSON.stringify(body),
           {
             headers: {
               "content-type": "application/json; charset=utf-8",

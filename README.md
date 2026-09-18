@@ -66,6 +66,13 @@ pre-rebuild baseline in `qa/before/`.
 
 ## Data freshness
 - Cloudflare cron `17 * * * *` (hourly) force-rebuilds the KV league payload — covers Thu/Sun/Mon game windows.
+- **Live auto-refresh (game days):** while a game window is `in_progress` the Worker
+  only trusts its cached payload for five minutes and accepts a forced
+  `?refresh=1` rebuild every five minutes (shorter than the usual ten-minute
+  throttle). The client polls `/api/data` on the cadence the payload reports in
+  `refresh_window` (2 min live / 15 min otherwise), silently, and only while the
+  tab is visible and idle. So on game days the site is at most ~5 minutes stale
+  without anyone tapping Refresh.
 - Hermes script-only cron **XClub Player Metadata Refresh** runs daily at 8:00 AM America/Toronto. On this native-Windows host it uses
   `xclub_player_metadata_refresh.py` (not the Git-Bash/WSL `.sh` convenience wrapper). It fetches the
   live Sleeper `/players/nfl` dump, atomically rebuilds `public/data/players.json`, verifies every
