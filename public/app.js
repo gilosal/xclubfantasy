@@ -212,6 +212,7 @@ function narrativeCard(c, d) {
 }
 function renderWeekend(d) {
   const n = d.weekend_narrative || { week: d.next_week?.week, lwWeek: d.last_week?.week, pre: [], recap: [] };
+  const feat = d.featured || null;
   const pre = n.pre.map((c) => narrativeCard(c, d)).join("");
   const recap = n.recap.map((c) => narrativeCard(c, d)).join("");
   const preHead = n.week
@@ -223,9 +224,52 @@ function renderWeekend(d) {
   $("view-weekend").innerHTML =
     `${intro("The weekend, told match-up by match-up", n.week ? `Week ${n.week} hype, plus the story from Week ${n.lwWeek}.` : "Week-by-week stories.")}
     <button id="shareWeekend" class="solid-button">Share this hype page</button>
+    ${feat ? featuredCard(feat, d) : ""}
     ${preHead}
     ${recapHead}
     <p class="context-note">Pre-game lines use Sleeper's standard projections — an edge is a points gap, not a win probability. Recaps are built from the final box score, including hindsight bench swings. Injury chips are status flags — verify before kickoff.</p>`;
+}
+function featuredCard(c, d) {
+  const wm = d.week_mode || {};
+  const isRecap = wm.mode === "recap";
+  const sideLine = (s) => {
+    const st = d.standings.find((x) => String(x.rid) === String(s.rid)) || {};
+    const rec = `${st.wins ?? "?"}-${st.losses ?? "?"}${st.ties ? `-${st.ties}` : ""}`;
+    const isA = String(c.a.rid) === String(s.rid);
+    const val = isRecap ? (isA ? c.scoreA : c.scoreB) : s.proj;
+    return `<div class="feat-side ${c.winner && String(c.winner.rid) === String(s.rid) ? "winner" : ""}">
+      <div class="feat-score num">${f(val)}</div>
+      <a class="feat-team" href="#team/${s.rid}">${esc(s.team)}</a>
+      <div class="small">${rec} · #${s.rank ?? "—"}${s.streak ? ` · ${esc(s.streak)}` : ""}</div>
+      ${(s.injuries || []).length ? `<div class="feat-inj small">${s.injuries.map((i) => `${esc(i.name)} (${esc(i.chip)})`).join(" · ")}</div>` : ""}
+    </div>`;
+  };
+  const headline = c.h2h
+    ? c.h2h.leader === "Even"
+      ? `An even rivalry, decided by ${esc(c.winner ? c.winner.team : "whoever shows up")}`
+      : `${esc(c.h2h.leader)} own this series`
+    : isRecap
+      ? `${esc(c.winner?.team || "One side")} had the last word`
+      : `${esc(c.fav?.team || "No projected favorite")}, for now`;
+  const dek = isRecap
+    ? c.narrative ? c.narrative.join(" ") : ""
+    : `${c.why.charAt(0).toUpperCase() + c.why.slice(1)}: ${f(c.a.proj)} for ${c.a.team} against ${f(c.b.proj)} for ${c.b.team}. ${c.narrative ? c.narrative.join(" ") : ""}`;
+  const battle = c.battle
+    ? `<div class="feat-fact"><span>Closest positional battle</span><strong>${esc(c.battle.slot)} · ${f(c.battle.a)} to ${f(c.battle.b)}</strong></div>`
+    : "";
+  const topLine = c.top ? `<div class="feat-fact"><span>Top scorer</span><strong>${esc(c.top.name)} · ${f(c.top.pts)} pts</strong></div>` : "";
+  const decidedBy = c.decidedBy?.text ? `<div class="feat-fact decided"><span>The deciding move</span><strong>${esc(c.decidedBy.text)}</strong></div>` : "";
+  const leaves = c.leaves
+    ? `<div class="feat-leaves small">Where it leaves them: ${esc(c.leaves.a.rec)} at #${c.leaves.a.rank ?? "—"} · ${esc(c.leaves.b.rec)} at #${c.leaves.b.rank ?? "—"}</div>`
+    : "";
+  return `<section class="feat" aria-labelledby="featTitle">${head("Matchup of the week", c.week ? `Week ${c.week}` : "")}
+    <article class="feat-card">
+      <div class="feat-scores">${sideLine(c.a)}<div class="feat-vs" aria-hidden="true">${isRecap ? "final" : "vs"}</div>${sideLine(c.b)}</div>
+      <h3 id="featTitle">${esc(headline)}</h3>
+      <p class="feat-dek">${esc(dek)}</p>
+      ${topLine}${battle}${decidedBy}${leaves}
+      <a class="text-link feat-open" href="#game/${c.week}/${c.mid}">Open the full matchup box →</a>
+    </article></section>`;
 }
 function renderMatchups(d) {
   if (!d.last_week) matchMode = "preview";
@@ -243,6 +287,43 @@ function renderMatchups(d) {
 function renderStandings(d) {
   $("view-standings").innerHTML =
     `${intro("The season so far", "The standings. No spin.", "Wins and losses first. Points for breaks an equal record. Scoring form below shows who is producing, independent of the schedule.")}<div class="table-wrap"><table class="standings-table"><caption class="small" style="text-align:left;padding:12px 8px">${d.season} standings · ${d.league.size} teams</caption><thead><tr><th scope="col">#</th><th scope="col">Team</th><th scope="col" class="num">W–L–T</th><th scope="col" class="num">PF</th><th scope="col" class="num optional-col">PA</th><th scope="col" class="num optional-col">FAAB left</th></tr></thead><tbody>${d.standings.map((t) => `<tr class="${t.rank === d.league.playoff_teams ? "cutoff " : ""}${String(t.rid) === followed ? "followed" : ""}"><td class="rank-col">${t.rank}</td><td class="team-cell"><div class="team-title">${esc(t.name)}</div><div class="small">${esc(t.manager)}</div></td><td class="num">${rec(t)}</td><td class="num">${f(t.fpts)}</td><td class="num optional-col">${f(t.pa)}</td><td class="num optional-col">$${Math.max(0, d.league.faab - t.faab_used)}</td></tr>`).join("")}</tbody></table></div><p class="context-note">PF = points for. PA = points against. Red line marks the current top ${d.league.playoff_teams}; it does not indicate a clinched playoff place.</p><section class="form-table">${head("Scoring form", "Not a prediction")}<p class="context-note">${esc(d.methodology.rankings)} No made-up hot takes or unsupported rank changes.</p><div class="form-rows">${d.power_rankings.map((t) => `<div class="form-row"><span class="position">${t.rank}</span><div><strong>${esc(t.name)}</strong>${t.delta ? `<span class="change">${t.delta > 0 ? "↑" : "↓"} ${Math.abs(t.delta)}</span>` : ""}<div class="small">All-play: ${esc(t.all_play)}</div></div><div class="right"><div class="ppg num">${f(t.ppg)}</div><div class="small">points / game</div></div></div>`).join("")}</div></section>`;
+}
+function renderInjuries(d) {
+  const list = d.injuries || [];
+  const snap = d.player_metadata_asof ? date(Date.parse(d.player_metadata_asof) || d.asof) : "an unknown time";
+  const byChips = (codes) => list.filter((p) => codes.includes(String(p.injury_chip || "").toUpperCase())).length;
+  const chips = [
+    ["o", "Out", ["O", "PUP"]],
+    ["ir", "Injured reserve", ["IR", "IR-R"]],
+    ["sus", "Suspended", ["SUS"]],
+    ["d", "Doubtful", ["D", "SSPD"]],
+    ["q", "Questionable", ["Q"]],
+    ["q", "Did not play / other", ["DNP", "NA", "?"]],
+  ].filter((c) => byChips(c[2]) > 0);
+  $( "view-injuries").innerHTML =
+    `${intro("The trainer's report", "Injury designations.", "Every rostered player carrying an injury flag in the current metadata snapshot, most severe first. Designations change before kickoff — treat this as a starting point, not a guarantee.")}` +
+    `<div class="sev-summary" role="list" aria-label="Severity summary">${chips.map((c) => `<span class="sev-pill" role="listitem"><span class="injury-sev sev-${c[0]}">${c[1].split(" ")[0].toUpperCase()}</span>${byChips(c[2])} <span class="small">${c[1]}</span></span>`).join("")}</div>` +
+    `<div class="filters injury-filters"><div><label for="injuryPosFilter">Position</label><select id="injuryPosFilter"><option value="">All positions</option>${["QB", "RB", "WR", "TE", "K", "DEF"].map((p) => `<option value="${p}">${p === "DEF" ? "D/ST" : p}</option>`).join("")}</select></div><div class="owner-filter"><label for="injuryTeamFilter">Fantasy team</label><select id="injuryTeamFilter"><option value="">Every team</option>${d.standings.map((t) => `<option value="${t.rid}">${esc(t.name)}</option>`).join("")}</select></div></div>` +
+    `<div class="table-wrap"><table class="injury-table"><caption class="small" style="text-align:left;padding:12px 8px">${list.length} rostered player${list.length === 1 ? "" : "s"} with a designation · snapshot ${snap} ET</caption><thead><tr><th scope="col">Player</th><th scope="col">Pos</th><th scope="col">NFL team</th><th scope="col">Status</th><th scope="col" class="owner-col">Fantasy team</th><th scope="col" class="num optional-col">W${d.last_week?.week || "—"} pts</th></tr></thead><tbody id="injuryRows">${injuryRowsHtml(list, d)}</tbody></table><div id="injuryEmpty" class="empty" hidden>No rostered players match these filters.</div></div>` +
+    `<p class="context-note">Statuses are Sleeper designations from the player metadata snapshot (${snap} ET) and are a point-in-time view. "PUP" is shown at out level because those players are not practicing. Full words in the source are abbreviated here. Always verify in <a href="https://sleeper.com/leagues/${esc(d.league.id)}" target="_blank" rel="noopener noreferrer">Sleeper</a> before lineup lock.</p>`;
+  const pf = $("injuryPosFilter"), tf = $("injuryTeamFilter");
+  const apply = () => {
+    const pos = pf.value, team = tf.value;
+    const filtered = list.filter((p) => (!pos || p.pos === pos) && (!team || String(p.rid) === team));
+    $("injuryRows").innerHTML = injuryRowsHtml(filtered, d);
+    $("injuryEmpty").hidden = filtered.length > 0;
+  };
+  pf.addEventListener("change", apply);
+  tf.addEventListener("change", apply);
+}
+function injuryRowsHtml(list, d) {
+  return list
+    .map((p) => {
+      const chip = p.injury_chip || String(p.injury).slice(0, 3).toUpperCase();
+      const sev = String(chip).toLowerCase().replace(/[^a-z]/g, "");
+      return `<tr><td class="name-cell"><strong>${esc(p.name)}</strong></td><td>${esc(p.pos === "DEF" ? "D/ST" : p.pos)}</td><td>${esc(p.team || "FA")}</td><td><span class="injury-sev sev-${sev}" title="${esc(p.injury || p.injury_chip)}">${esc(chip)}</span></td><td class="owner-col">${p.rid != null ? `<a class="text-link" href="#team/${p.rid}">${esc(p.teamName || "—")}</a>` : "—"}</td><td class="num optional-col">${p.last_pts != null ? f(p.last_pts) : "—"}</td></tr>`;
+    })
+    .join("");
 }
 function renderPlayers(d) {
   $("view-players").innerHTML =
@@ -448,7 +529,7 @@ function route(scroll = true) {
     const rid = hash.slice(5);
     if (renderTeamPage(DATA, rid)) {
       currentView = "teams";
-      for (const v of ["home", "weekend", "matchups", "standings", "teams", "players", "history"]) $(`view-${v}`).hidden = v !== "teams";
+      for (const v of ["home", "weekend", "matchups", "standings", "teams", "players", "injuries", "history"]) $(`view-${v}`).hidden = v !== "teams";
       document.querySelectorAll("[data-nav]").forEach((a) => {
         if (a.dataset.nav === "teams") a.setAttribute("aria-current", "page");
         else a.removeAttribute("aria-current");
@@ -483,7 +564,7 @@ function route(scroll = true) {
     currentView = "matchups";
     matchMode = wantPreview ? "preview" : "recap";
     renderMatchups(DATA);
-    for (const v of ["home", "weekend", "matchups", "standings", "teams", "players", "history"]) $(`view-${v}`).hidden = v !== "matchups";
+    for (const v of ["home", "weekend", "matchups", "standings", "teams", "players", "injuries", "history"]) $(`view-${v}`).hidden = v !== "matchups";
     document.querySelectorAll("[data-nav]").forEach((a) => {
       if (a.dataset.nav === "matchups") a.setAttribute("aria-current", "page");
       else a.removeAttribute("aria-current");
@@ -505,14 +586,14 @@ function route(scroll = true) {
     $("articleDialog").close();
     document.body.classList.remove("modal-open");
   }
-  const valid = ["home", "weekend", "matchups", "standings", "teams", "players", "history"];
+  const valid = ["home", "weekend", "matchups", "standings", "teams", "players", "injuries", "history"];
   currentView = valid.includes(hash) ? hash : "home";
   for (const view of valid) $(`view-${view}`).hidden = view !== currentView;
   document.querySelectorAll("[data-nav]").forEach((a) => {
     if (a.dataset.nav === currentView) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   });
-  document.title = `${{ home: "The league, covered", weekend: "Weekend hype", matchups: "Scores & matchups", standings: "Standings", teams: "Team pages", players: "Players", history: "League history" }[currentView]} | XClub Fantasy`;
+  document.title = `${{ home: "The league, covered", weekend: "Weekend hype", matchups: "Scores & matchups", standings: "Standings", teams: "Team pages", players: "Players", injuries: "Injury report", history: "League history" }[currentView]} | XClub Fantasy`;
   if (scroll) window.scrollTo({ top: 0, behavior: "instant" });
 }
 function closeArticle() {
@@ -527,6 +608,7 @@ function render(d) {
   renderStandings(d);
   renderTeams(d);
   renderPlayers(d);
+  renderInjuries(d);
   renderHistory(d);
   $("edition").textContent = `${d.season} / Week ${d.current_week}`;
   $("navSeason").textContent =

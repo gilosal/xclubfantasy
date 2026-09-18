@@ -17,13 +17,14 @@ import {
   seasonTopPerformers,
   weekendHype,
   weekendNarrative,
+  featuredMatchup,
   ogMeta,
   buildEditorial,
 } from "./domain.js";
 
 const LID = "1371971946459201536";
 const API = "https://api.sleeper.app/v1";
-const BUILD = "2026-09-17.1";
+const BUILD = "2026-09-17.2";
 const ORIGIN = "https://xclubfantasy.robsplex.com";
 const escAttr = (s) =>
   String(s ?? "").replace(
@@ -539,6 +540,7 @@ export async function buildPayload() {
   payload.week_mode = weekMode(payload);
   payload.weekend = weekendHype(payload);
   payload.weekend_narrative = weekendNarrative(payload);
+  payload.featured = featuredMatchup(payload, payload.weekend_narrative);
   payload.articles = buildEditorial(payload);
   return payload;
 }
@@ -645,7 +647,7 @@ export default {
     if (deep) {
       return Response.redirect(`${url.origin}/#${deep[1]}/${deep[2]}`, 308);
     }
-    const view = url.pathname.match(/^\/(home|matchups|standings|teams|players|history|main)\/?$/);
+    const view = url.pathname.match(/^\/(home|matchups|standings|teams|players|injuries|history|main)\/?$/);
     if (view) {
       return Response.redirect(`${url.origin}/#${view[1]}`, 308);
     }

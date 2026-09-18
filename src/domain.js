@@ -476,6 +476,50 @@ export function weekendNarrative(d) {
   };
 }
 
+/**
+ * Deterministic "matchup of the week" selection for the deep-dive lead on the
+ * hype page. Uses the same data-only narrative cards as the rest of the page:
+ *
+ * - Preview/live weeks: the closest projected finish among matchups with both
+ *   projections available. Ties break on how evenly matched the teams are by
+ *   rank, then on whether an all-time series exists, then matchup id (stable).
+ * - Recap weeks: the closest actual finish (smallest positive margin), then
+ *   the bigger total, then matchup id.
+ *
+ * Returns the chosen card plus a one-line `why`, or null when there is
+ * nothing to feature (no games, or no usable numbers).
+ */
+export function featuredMatchup(d, narrative) {
+  const n = narrative || weekendNarrative(d);
+  const mode = weekMode(d).mode;
+  const rankOf = new Map((d.standings || []).map((s) => [String(s.rid), s.rank ?? 99]));
+  const rankDiff = (c) => Math.abs((rankOf.get(String(c.a?.rid)) ?? 99) - (rankOf.get(String(c.b?.rid)) ?? 99));
+  if (mode === "preview" || mode === "live") {
+    const pool = (n.pre || []).filter((c) => c.edge != null);
+    if (!pool.length) return null;
+    const best = pool
+      .slice()
+      .sort(
+        (a, b) =>
+          a.edge - b.edge ||
+          rankDiff(a) - rankDiff(b) ||
+          (b.h2h ? 1 : 0) - (a.h2h ? 1 : 0) ||
+          a.mid - b.mid,
+      )[0];
+    return { ...best, why: best.close ? "projected to be a coin flip" : `projected ${fmt(best.edge)} apart` };
+  }
+  if (mode === "recap") {
+    const pool = (n.recap || []).filter((c) => c.margin != null && c.margin > 0 && c.winner);
+    if (!pool.length) return null;
+    const total = (c) => (c.scoreA ?? 0) + (c.scoreB ?? 0);
+    const best = pool
+      .slice()
+      .sort((a, b) => a.margin - b.margin || total(b) - total(a) || a.mid - b.mid)[0];
+    return { ...best, why: `won by just ${fmt(best.margin)}` };
+  }
+  return null;
+}
+
 /** Per-URL og:title/og:description for link cards (WhatsApp, X, etc.). */
 export function ogMeta(pathname, d) {
   const nw = d?.next_week || {};

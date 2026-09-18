@@ -33,14 +33,17 @@
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://xclubfantasy.robsplex.com/" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/icon-192.png" type="image/png" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=20260917-2" />
-    <script src="/app.js?v=20260917-1" defer></script>
+    <link rel="stylesheet" href="/styles.css?v=20260917-5" />
+    <script src="/app.js?v=20260917-4" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -124,6 +127,14 @@
             /></svg
           ><span>Players</span></a
         >
+        <a href="#injuries" data-nav="injuries"
+          ><svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              fill-rule="evenodd"
+              d="M12 3a9 9 0 1 0 9 9 9 9 0 0 0-9-9zm-2 5h4v2h2v4h-2v2h-4v-2h-2v-4h2z"
+            /></svg
+          ><span>Injuries</span></a
+        >
         <a href="#history" data-nav="history"
           ><svg viewBox="0 0 24 24" aria-hidden="true">
             <path
@@ -189,6 +200,12 @@
           id="view-players"
           class="view"
           aria-label="Player directory"
+          hidden
+        ></section>
+        <section
+          id="view-injuries"
+          class="view"
+          aria-label="Injury report"
           hidden
         ></section>
         <section

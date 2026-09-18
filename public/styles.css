@@ -21,7 +21,7 @@
   --notice-bg: #fff0cf;
   --notice-line: #a5710a;
   --art-bg: #e8e5dc;
-  --art-ghost: #d1c9ba;
+  --art-ghost: #7f7a71;
   --art-label: #676153;
   --art-shadow: #e8e5dc;
   --follow-eyebrow: #e99d92;
@@ -67,7 +67,7 @@
   --notice-bg: #33290f;
   --notice-line: #d8a13a;
   --art-bg: #1a1f26;
-  --art-ghost: #4a5563;
+  --art-ghost: #5d6b7c;
   --art-label: #8b93a0;
   --art-shadow: #12151a;
   --follow-eyebrow: #a5372e;
@@ -1051,7 +1051,7 @@ h3 {
   color: var(--white);
   background: var(--muted);
 }
-.injury-sev.sev-o, .injury-sev.sev-ir, .injury-sev.sev-irr, .injury-sev.sev-sus { background: var(--sev-o); }
+.injury-sev.sev-o, .injury-sev.sev-ir, .injury-sev.sev-irr, .injury-sev.sev-sus, .injury-sev.sev-pup { background: var(--sev-o); }
 .injury-sev.sev-d, .injury-sev.sev-sspd { background: var(--sev-d); }
 .injury-sev.sev-q, .injury-sev.sev-dnp { background: var(--sev-q); }
 .injury-row strong { font-size: 12.5px; }
@@ -1060,6 +1060,142 @@ h3 {
   color: var(--sev-o);
   font-weight: 700;
   white-space: nowrap;
+}
+/* ---- Injury report page ---- */
+.sev-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 12px 14px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  align-items: center;
+}
+.sev-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: 700 12px/1 var(--cond);
+  letter-spacing: 0.04em;
+}
+.sev-pill .injury-sev {
+  flex: 0 0 34px;
+  min-width: 34px;
+  font-size: 11px;
+  line-height: 20px;
+}
+.injury-table .name-cell {
+  font-size: 13px;
+}
+.injury-table .injury-sev {
+  display: inline-block;
+  min-width: 40px;
+}
+.injury-filters {
+  grid-template-columns: 1fr 1fr;
+}
+/* ---- Featured matchup of the week (hype lead) ---- */
+.feat {
+  margin: 4px 0 20px;
+}
+.feat-card {
+  background: var(--ink);
+  color: var(--paper);
+  border: 1px solid var(--line);
+  padding: 16px 16px 14px;
+}
+[data-theme="dark"] .feat-card {
+  background: #1a2028;
+  color: var(--ink);
+}
+.feat-scores {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+.feat-side .feat-score {
+  font: 800 30px/1 var(--cond);
+  text-align: center;
+}
+.feat-side.winner .feat-score {
+  color: var(--red);
+}
+.feat-team {
+  display: block;
+  text-align: center;
+  font: 700 12.5px/1.3 var(--cond);
+  letter-spacing: 0.02em;
+  color: inherit;
+  margin-top: 4px;
+}
+.feat-team:hover {
+  text-decoration: underline;
+}
+.feat-scores .small {
+  text-align: center;
+  color: inherit;
+  opacity: 0.7;
+}
+.feat-vs {
+  align-self: center;
+  font: 700 11px/1 var(--cond);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: inherit;
+  opacity: 0.55;
+  padding: 0 2px;
+}
+.feat-inj {
+  text-align: center;
+  margin-top: 3px;
+  opacity: 0.8;
+}
+.feat-card h3 {
+  font: 800 21px/1.2 var(--cond);
+  margin: 0 0 8px;
+}
+.feat-dek {
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 0 0 12px;
+  opacity: 0.92;
+}
+.feat-fact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid rgba(128, 128, 128, 0.25);
+  padding: 8px 0;
+  font-size: 12px;
+}
+.feat-fact span {
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-size: 10px;
+  opacity: 0.75;
+}
+.feat-fact strong {
+  font-size: 12.5px;
+  text-align: right;
+}
+.feat-fact.decided {
+  background: rgba(182, 43, 37, 0.12);
+  border-radius: 2px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.feat-leaves {
+  margin-top: 10px;
+  opacity: 0.85;
+}
+.feat-open {
+  margin-top: 12px;
+  display: inline-block;
+  color: inherit;
 }
 .team-grid {
   display: grid;
@@ -2251,7 +2387,7 @@ dialog::backdrop {
     --notice-bg: #fff0cf;
     --notice-line: #a5710a;
     --art-bg: #e8e5dc;
-    --art-ghost: #d1c9ba;
+    --art-ghost: #7f7a71;
     --art-label: #676153;
     --art-shadow: #e8e5dc;
     --follow-eyebrow: #e99d92;
