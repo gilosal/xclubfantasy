@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "xclubfantasy",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "kv_namespaces": [
+    { "binding": "XCF_KV", "id": "4cdf3704651841a989334d41db5ec3a7" },
+  ],
+  "triggers": {
+    "crons": ["17 * * * *"],
+  },
+  "routes": [{ "pattern": "xclubfantasy.robsplex.com", "custom_domain": true }],
+  "observability": {
+    "enabled": true,
+  },
+}

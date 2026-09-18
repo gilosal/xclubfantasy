@@ -1,0 +1,18 @@
+{
+  "name": "xclubfantasy",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:players": "python scripts/build_players.py",
+    "build:history": "python scripts/build_history.py",
+    "test": "node --test tests/*.test.js && python -m unittest discover -s tests -p test_*.py",
+    "check": "node --check src/index.js && node --check src/domain.js && node --check public/app.js",
+    "qa": "python scripts/qa_browser.py",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "axe-core": "^4.13.0",
+    "wrangler": "^4.126.0"
+  }
+}
