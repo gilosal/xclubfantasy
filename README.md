@@ -85,6 +85,28 @@ pre-rebuild baseline in `qa/before/`.
   Bump `BUILD` in `src/index.js` after code changes that alter payload shape, and bump the `?v=`
   query on `styles.css` / `app.js` in `index.html` so returning phones pick up new assets.
 
+## Weekly league digest (Discord)
+A fully factual, script-only digest — no LLM, no credentials. `scripts/weekly_digest.py`
+polls the public `/api/data` until the latest league week is fully scored (it re-checks every
+5 min for up to 60 min, because Monday Night Football can score after midnight), then builds a
+single Discord message from: the scoreboard, top-5 standings, the weekly awards, top performers,
+a next-week preview (closest projected finish + projected stars), the injury watch, and waiver
+wire moves. Every number traces to the league payload; nothing is invented.
+
+- **Delivery:** two Hermes script-only (`no_agent`) cron jobs run the native entrypoint
+  `xclub_weekly_digest.py` (a thin `runpy` wrapper around the script). The primary job fires
+  **Sunday 23:15 ET** (`15 23 * * 0`); a **Monday 08:00 ET** catch-up job (`0 8 * * 1`) handles
+  any week whose scores finalized late. Both deliver to the origin Discord channel.
+- **Exactly-once:** a `digest_state.json` ledger (gitignored) records which week/season pairs
+  have been delivered, so the Sunday + Monday pair never double-posts.
+- **Silent on no-op:** under `no_agent`, empty stdout means the week is not yet deliverable or
+  was already sent — the runner stays quiet. Non-zero exit (fetch/build failure) surfaces an
+  alert. Success on a delivered week prints only the digest text.
+- **Manual preview:** `python scripts/weekly_digest.py --dry-run` builds and prints the digest
+  from *current* data immediately (no waiting, no state write) — use it any day to see the shape.
+- **Degradation ladder:** the builder trims sections (injuries, then moves, then preview detail)
+  to fit Discord's 2000-char limit, always preserving the scoreboard + factual disclaimer.
+
 ## Sleeper API notes (verified 2026-09-16)
 - League is standard scoring → use `pts_std` in stats/projections.
 - DEF pids: rosters use plain abbr (`KC`), stats/projections use `TEAM_KC` — normalized in

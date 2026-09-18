@@ -6,4 +6,6 @@ qa/
 __pycache__/
 *.pyc
 .payload_test.json
+digest_state.json
+digest_state_test.json
 tmp_*
