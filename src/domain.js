@@ -207,6 +207,43 @@ export function injuryDesk(d) {
     );
 }
 
+/**
+ * The wire desk: league deadline + FAAB state, all from league settings and
+ * the standings (no estimates).
+ *  - trade_week: final week trades are accepted (league settings; defaults to
+ *    the last regular-season week when the league leaves it blank).
+ *  - regular_end: last regular-season week (the week before playoffs begin).
+ *  - faab_teams: each team's used / remaining share of the league's waiver
+ *    budget (the pool the team's FAAB draws from).
+ *  - counts: how many of the displayed transactions are of each type.
+ */
+export function waiverDesk(d) {
+  const week = d.current_week;
+  const tradeWeek = Number(d.league?.trade_deadline) || 0;
+  const regularEnd = Number(d.league?.regular_end) || 0;
+  const tradeOpen = tradeWeek > 0 && week <= tradeWeek;
+  const faab = Number(d.league?.faab) || 0;
+  const txs = d.transactions || [];
+  const counts = { waiver: 0, free_agent: 0, trade: 0 };
+  for (const t of txs) if (counts[t.type] != null) counts[t.type]++;
+  // Clamp to a sane range: Sleeper can carry a negative waiver_budget_used
+  // (a refund/quirk), which would otherwise show "more left than the pool".
+  const faab_teams = (d.standings || []).map((t) => {
+    const used = Math.max(0, t.faab_used || 0);
+    return { rid: t.rid, name: t.name, used, left: Math.max(0, Math.min(faab, faab - used)) };
+  });
+  return {
+    week,
+    trade_week: tradeWeek || null,
+    regular_end: regularEnd || null,
+    trade_open: tradeOpen,
+    trade_weeks_left: tradeOpen ? Math.max(0, tradeWeek - week) : 0,
+    faab,
+    counts,
+    faab_teams,
+  };
+}
+
 /** Weekly form for one team across all completed weeks, oldest first. */
 export function teamForm(weeks, rid) {
   const ridS = String(rid);

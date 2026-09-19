@@ -19,13 +19,14 @@ import {
   weekendNarrative,
   featuredMatchup,
   refreshWindow,
+  waiverDesk,
   ogMeta,
   buildEditorial,
 } from "./domain.js";
 
 const LID = "1371971946459201536";
 const API = "https://api.sleeper.app/v1";
-const BUILD = "2026-09-17.3";
+const BUILD = "2026-09-18.1";
 const ORIGIN = "https://xclubfantasy.robsplex.com";
 const escAttr = (s) =>
   String(s ?? "").replace(
@@ -511,6 +512,8 @@ export async function buildPayload() {
         ? "Superflex"
         : `${slots.filter((p) => p === "QB").length}QB`,
       faab: league.settings?.waiver_budget || 0,
+      trade_deadline: league.settings?.trade_deadline || 0,
+      regular_end: (league.settings?.playoff_week_start || 15) - 1,
       playoff_teams: league.settings?.playoff_teams || 6,
       roster_positions: league.roster_positions,
     },
@@ -555,6 +558,7 @@ export async function buildPayload() {
   payload.weekend = weekendHype(payload);
   payload.weekend_narrative = weekendNarrative(payload);
   payload.featured = featuredMatchup(payload, payload.weekend_narrative);
+  payload.waivers = waiverDesk(payload);
   payload.articles = buildEditorial(payload);
   return payload;
 }
@@ -669,7 +673,7 @@ export default {
     if (deep) {
       return Response.redirect(`${url.origin}/#${deep[1]}/${deep[2]}`, 308);
     }
-    const view = url.pathname.match(/^\/(home|matchups|standings|teams|players|injuries|history|main)\/?$/);
+    const view = url.pathname.match(/^\/(home|matchups|standings|teams|players|injuries|waivers|history|main)\/?$/);
     if (view) {
       return Response.redirect(`${url.origin}/#${view[1]}`, 308);
     }

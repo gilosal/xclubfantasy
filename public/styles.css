@@ -1336,6 +1336,118 @@ h3 {
 }
 .tx-item .small { flex: 1 1 auto; min-width: 0; }
 .tx-item .num { font: 700 12px/1 var(--cond); }
+/* --- Wire: deadline + FAAB + transaction list --- */
+.wire-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 0 0 16px;
+}
+.deadline-card,
+.faab-card {
+  background: var(--white);
+  border: 1px solid var(--line);
+  padding: 14px;
+  min-width: 0;
+}
+.deadline-card .deadline-tag,
+.faab-card .faab-tag {
+  display: block;
+  font: 800 11px/1 var(--cond);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.deadline-card strong {
+  display: block;
+  font: 800 28px/1 var(--cond);
+}
+.deadline-card p,
+.faab-card .context-note {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--dek);
+  margin: 8px 0 0;
+}
+.deadline-card.open strong { color: var(--win); }
+.deadline-card.closed strong { color: var(--loss); }
+.faab-card strong {
+  display: block;
+  font: 800 28px/1 var(--cond);
+  margin-bottom: 10px;
+}
+.faab-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.faab-bars > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.faab-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.faab-bar {
+  flex: 0 0 84px;
+  height: 6px;
+  background: var(--soft);
+  overflow: hidden;
+}
+.faab-fill {
+  display: block;
+  height: 100%;
+  background: var(--red);
+}
+.faab-num { flex: 0 0 auto; font-size: 11px; color: var(--muted); }
+.wire-filters { margin-bottom: 14px; }
+.wire-list {
+  background: var(--white);
+  border: 1px solid var(--line);
+  padding: 4px 14px;
+}
+.wire-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--line);
+}
+.wire-item:last-child { border-bottom: 0; }
+.wire-item .wire-week {
+  flex: 0 0 auto;
+  font: 800 11px/1.4 var(--cond);
+  color: var(--muted);
+}
+.wire-item .wire-type {
+  flex: 0 0 74px;
+  font: 800 11px/1.4 var(--cond);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.wire-item .wire-type.waiver { color: var(--red); }
+.wire-item .wire-type.trade { color: var(--focus); }
+.wire-item .wire-type.fa { color: var(--muted); }
+.wire-item .wire-copy { flex: 1 1 auto; min-width: 0; }
+.wire-item .wire-copy p { margin: 1px 0; font-size: 14px; }
+.wire-item .wire-bid {
+  flex: 0 0 auto;
+  font: 800 14px/1.4 var(--cond);
+  color: var(--ink);
+  background: var(--soft);
+  padding: 3px 8px;
+}
+.wire-item.won .wire-bid { color: var(--win); }
+@media (max-width: 520px) {
+  .wire-cards { grid-template-columns: 1fr; }
+}
 /* --- Weekend hype page --- */
 .hype-banner {
   display: flex;

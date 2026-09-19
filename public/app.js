@@ -325,6 +325,47 @@ function injuryRowsHtml(list, d) {
     })
     .join("");
 }
+function renderWaivers(d) {
+  const wk = d.waivers || {};
+  const txs = d.transactions || [];
+  const deadlineCard = wk.trade_open
+    ? `<div class="deadline-card open"><span class="deadline-tag">Trade deadline</span><strong>Week ${wk.trade_week}</strong><p>${wk.trade_weeks_left === 0 ? "Trades close after this week — the final window is open now." : `${wk.trade_weeks_left} week${wk.trade_weeks_left === 1 ? "" : "s"} of trade windows left.`}</p></div>`
+    : `<div class="deadline-card closed"><span class="deadline-tag">Trade deadline</span><strong>Closed</strong><p>The league's trade window closed after Week ${wk.trade_week || "—"}. Only waiver adds and drops remain.</p></div>`;
+  const faabCard = wk.faab
+    ? `<div class="faab-card"><span class="faab-tag">FAAB pool</span><strong>$${wk.faab}</strong><div class="faab-bars" role="list" aria-label="FAAB spent by each team">${wk.faab_teams.map((t) => `<span role="listitem" title="${esc(t.name)}: $${t.used} spent, $${t.left} left"><span class="faab-name">${esc(t.name)}</span><span class="faab-bar"><span class="faab-fill" style="width:${Math.round((t.used / wk.faab) * 100)}%"></span></span><span class="faab-num num">${t.used}/${wk.faab}</span></span>`).join("")}</div><p class="context-note">Waiver claims draw from the league's shared $${wk.faab} pool; each team's remaining share is shown. A bid is the claim itself, not a separate fee.</p></div>`
+    : "";
+  $( "view-waivers").innerHTML =
+    `${intro("The wire", "Waivers & transactions.", "Every completed waiver claim, add, drop and trade in the current window, plus the trade deadline and the league's FAAB pool. This page only reports what happened — make changes in Sleeper.")}` +
+    `<div class="wire-cards">${deadlineCard}${faabCard}</div>` +
+    `<div class="filters wire-filters"><div><label for="wireType">Move type</label><select id="wireType"><option value="all">All moves</option><option value="waiver">Waivers</option><option value="free_agent">Adds &amp; drops</option><option value="trade">Trades</option></select></div><div><label for="wirePos">Position</label><select id="wirePos"><option value="">All positions</option>${["QB","RB","WR","TE","K","DEF"].map((p) => `<option value="${p}">${p === "DEF" ? "D/ST" : p}</option>`).join("")}</select></div><div><label for="wireWeek">Week</label><select id="wireWeek"><option value="">Any week</option>${[d.current_week, d.current_week - 1].filter((w) => w >= 1).map((w) => `<option value="${w}">Week ${w}</option>`).join("")}</select></div><div class="owner-filter"><label for="wireTeam">Team</label><select id="wireTeam"><option value="">Every team</option>${d.standings.map((t) => `<option value="${t.rid}">${esc(t.name)}</option>`).join("")}</select></div></div>` +
+    `<div class="wire-list" id="wireList">${wireItemsHtml(txs, { type: "all", pos: "", week: "", team: "" })}</div>` +
+    `<p class="context-note">Only completed moves are listed; failed or cancelled claims are excluded. Bids are the FAAB amount a team spent to win the claim.</p>`;
+  const wireApply = () => {
+    $("wireList").innerHTML = wireItemsHtml(txs, {
+      type: $("wireType").value,
+      pos: $("wirePos").value,
+      week: $("wireWeek").value,
+      team: $("wireTeam").value,
+    });
+  };
+  for (const id of ["wireType", "wirePos", "wireWeek", "wireTeam"])
+    $(id).addEventListener("change", wireApply);
+}
+function wireItemsHtml(txs, f) {
+  const rows = txs.filter((t) =>
+    (f.type === "all" || t.type === f.type) &&
+    (!f.pos || (t.adds || []).some((p) => p.pos === f.pos)) &&
+    (!f.week || t.week === Number(f.week)) &&
+    (!f.team || [...(t.adds || []), ...(t.drops || [])].some((p) => String(p.rid) === f.team)),
+  );
+  if (!rows.length) return '<div class="empty">No completed moves match these filters in the current window.</div>';
+  return rows
+    .map((t) => {
+      const win = t.type === "waiver" && (t.adds || []).length > 0;
+      return `<div class="wire-item ${win ? "won" : ""}"><span class="wire-week">W${t.week}</span><span class="wire-type ${t.type === "waiver" ? "waiver" : t.type === "trade" ? "trade" : "fa"}">${t.type === "waiver" ? "Waiver" : t.type === "trade" ? "Trade" : "Add/drop"}</span><div class="wire-copy">${t.lines.map((l) => `<p>${esc(l)}</p>`).join("")}</div>${t.bid != null ? `<span class="wire-bid num" title="${win ? "Won bid" : "Bid"}">$${t.bid}</span>` : ""}</div>`;
+    })
+    .join("");
+}
 function renderPlayers(d) {
   $("view-players").innerHTML =
     `${intro("The player room", "Players.", "Search rostered players and the available player pool. Availability is specific to this league; projections are Sleeper standard estimates.")}<div class="filters"><div class="search-field"><label for="playerSearch">Search players or NFL teams</label><input id="playerSearch" type="search" placeholder="Name or team…" autocomplete="off"></div><div><label for="positionFilter">Position</label><select id="positionFilter"><option value="">All positions</option>${["QB", "RB", "WR", "TE", "K", "DEF"].map((p) => `<option value="${p}">${p === "DEF" ? "D/ST" : p}</option>`).join("")}</select></div><div><label for="availabilityFilter">Availability</label><select id="availabilityFilter"><option value="">All players</option><option value="free">Available</option><option value="owned">Rostered</option></select></div><div class="owner-filter"><label for="ownerFilter">Fantasy team</label><select id="ownerFilter"><option value="">Every team</option>${d.standings.map((t) => `<option value="${t.rid}">${esc(t.name)}</option>`).join("")}</select></div><div><label for="playerSort">Sort by</label><select id="playerSort"><option value="proj">Week ${d.next_week.week} projection</option><option value="last_pts">Last-week points</option><option value="name">Player name</option></select></div></div><div class="results-meta"><span id="playerCount" aria-live="polite"></span><button id="resetFilters">Reset filters</button></div><div class="table-wrap"><table class="player-table"><thead><tr><th scope="col">Player</th><th scope="col" class="owner-col">Fantasy team</th><th scope="col" class="num">W${d.last_week?.week || "—"} pts</th><th scope="col" class="num">W${d.next_week.week} proj.</th></tr></thead><tbody id="playerRows"></tbody></table><div id="playerEmpty" class="empty" hidden>No matching players. Try a different name or reset the filters.</div></div><button id="morePlayers" class="show-more">Show more players</button><p class="context-note">Choose a sort above; missing scores stay at the bottom. A dash means no recorded value, not zero. Last-week points are available for players on last week's league rosters. Player metadata and injury designations are a snapshot from ${d.player_metadata_asof ? esc(date(d.player_metadata_asof)) + " ET" : "an unknown time"}; verify current status in Sleeper before setting a lineup.</p><section class="feature-row">${head("Trending on Sleeper", "Last 7 days")}<p class="context-note">Platform-wide add activity, not unique leagues or a recommendation. Availability below is checked against this league's rosters.</p><div class="players-preview">${d.trending
@@ -529,7 +570,7 @@ function route(scroll = true) {
     const rid = hash.slice(5);
     if (renderTeamPage(DATA, rid)) {
       currentView = "teams";
-      for (const v of ["home", "weekend", "matchups", "standings", "teams", "players", "injuries", "history"]) $(`view-${v}`).hidden = v !== "teams";
+      for (const v of ["home", "weekend", "matchups", "standings", "teams", "players", "injuries", "waivers", "history"]) $(`view-${v}`).hidden = v !== "teams";
       document.querySelectorAll("[data-nav]").forEach((a) => {
         if (a.dataset.nav === "teams") a.setAttribute("aria-current", "page");
         else a.removeAttribute("aria-current");
@@ -564,7 +605,7 @@ function route(scroll = true) {
     currentView = "matchups";
     matchMode = wantPreview ? "preview" : "recap";
     renderMatchups(DATA);
-    for (const v of ["home", "weekend", "matchups", "standings", "teams", "players", "injuries", "history"]) $(`view-${v}`).hidden = v !== "matchups";
+    for (const v of ["home", "weekend", "matchups", "standings", "teams", "players", "injuries", "waivers", "history"]) $(`view-${v}`).hidden = v !== "matchups";
     document.querySelectorAll("[data-nav]").forEach((a) => {
       if (a.dataset.nav === "matchups") a.setAttribute("aria-current", "page");
       else a.removeAttribute("aria-current");
@@ -586,14 +627,14 @@ function route(scroll = true) {
     $("articleDialog").close();
     document.body.classList.remove("modal-open");
   }
-  const valid = ["home", "weekend", "matchups", "standings", "teams", "players", "injuries", "history"];
+  const valid = ["home", "weekend", "matchups", "standings", "teams", "players", "injuries", "waivers", "history"];
   currentView = valid.includes(hash) ? hash : "home";
   for (const view of valid) $(`view-${view}`).hidden = view !== currentView;
   document.querySelectorAll("[data-nav]").forEach((a) => {
     if (a.dataset.nav === currentView) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   });
-  document.title = `${{ home: "The league, covered", weekend: "Weekend hype", matchups: "Scores & matchups", standings: "Standings", teams: "Team pages", players: "Players", injuries: "Injury report", history: "League history" }[currentView]} | XClub Fantasy`;
+  document.title = `${{ home: "The league, covered", weekend: "Weekend hype", matchups: "Scores & matchups", standings: "Standings", teams: "Team pages", players: "Players", injuries: "Injury report", waivers: "Waivers & transactions", history: "League history" }[currentView]} | XClub Fantasy`;
   if (scroll) window.scrollTo({ top: 0, behavior: "instant" });
 }
 function closeArticle() {
@@ -609,6 +650,7 @@ function render(d) {
   renderTeams(d);
   renderPlayers(d);
   renderInjuries(d);
+  renderWaivers(d);
   renderHistory(d);
   $("edition").textContent = `${d.season} / Week ${d.current_week}`;
   $("navSeason").textContent =

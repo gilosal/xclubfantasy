@@ -42,8 +42,8 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=20260917-5" />
-    <script src="/app.js?v=20260918-1" defer></script>
+    <link rel="stylesheet" href="/styles.css?v=20260918-1" />
+    <script src="/app.js?v=20260918-2" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -135,6 +135,16 @@
             /></svg
           ><span>Injuries</span></a
         >
+        <a href="#waivers" data-nav="waivers"
+          ><svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M4 7h9l6 5-6 5H4z"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+            /></svg
+          ><span>Wire</span></a
+        >
         <a href="#history" data-nav="history"
           ><svg viewBox="0 0 24 24" aria-hidden="true">
             <path
@@ -206,6 +216,12 @@
           id="view-injuries"
           class="view"
           aria-label="Injury report"
+          hidden
+        ></section>
+        <section
+          id="view-waivers"
+          class="view"
+          aria-label="Waiver wire and transactions"
           hidden
         ></section>
         <section
