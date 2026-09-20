@@ -124,13 +124,12 @@ def main() -> int:
         restore_file(previous_bytes)
         return 0
 
-    run_command(
-        [python_exe, str(PROJECT_ROOT / "scripts" / "verify_players.py")],
-        "Sleeper team/injury verification",
-        verify_log,
-        300,
-    )
-
+    # build_players.py already validates every numeric bundle row against the
+    # exact Sleeper /players/nfl response used to build it. Fetching Sleeper a
+    # second time here creates a race: injury statuses can change between the
+    # two responses and make a valid point-in-time bundle look inconsistent.
+    # The post-deploy timestamp check below proves that this validated bundle is
+    # the one exposed by production.
     npx = find_command("npx")
     deploy_output = run_command(
         [npx, "wrangler", "deploy", "--config", "wrangler.jsonc"],

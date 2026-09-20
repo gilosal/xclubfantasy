@@ -94,6 +94,24 @@ function featureArt(a) {
 function storyCard(a) {
   return `<article class="story-card"><span class="eyebrow">${esc(a.tag)}</span><h3><a href="#story/${esc(a.id)}" data-story="${esc(a.id)}">${esc(a.headline)}</a></h3><p>${esc(a.dek)}</p>${storyLink(a)}</article>`;
 }
+function homeHypeSection(d) {
+  const n = d.weekend_narrative || {};
+  const pre = Array.isArray(n.pre) ? n.pre : [];
+  const recap = Array.isArray(n.recap) ? n.recap : [];
+  const useRecap = d.featured?.mode === "recap" && recap.length > 0;
+  const source = useRecap ? recap : pre.length ? pre : recap;
+  const featured = d.featured && source.some((c) => c.mid === d.featured.mid) ? d.featured : null;
+  const stories = source
+    .filter((c) => !featured || c.mid !== featured.mid)
+    .slice(0, 3);
+  if (!source.length && !featured) return "";
+  const week = useRecap ? n.lwWeek : n.week;
+  const label = useRecap
+    ? `Week ${week ?? "—"} recap · ${source.length} matchup stories`
+    : `Week ${week ?? "—"} preview · ${source.length} matchup stories`;
+  const remaining = Math.max(0, source.length - stories.length - (featured ? 1 : 0));
+  return `<section class="home-hype" aria-label="The Hype desk">${head("The Hype desk", label)}${featured ? featuredCard(featured, d, "homeFeatTitle") : ""}${stories.length ? `<div class="home-hype-cards">${stories.map((c) => narrativeCard(c, d)).join("")}</div>` : ""}<div class="home-hype-foot">${remaining ? `<span class="small">${remaining} more matchup stor${remaining === 1 ? "y" : "ies"} on Hype.</span>` : ""}<a class="text-link" href="#weekend">Read the full Hype page →</a></div></section>`;
+}
 function renderHome(d) {
   const wm = d.week_mode || { mode: "recap", week: d.last_week?.week, nextWeek: d.next_week?.week, leadStory: "weekly-lead" };
   const weekLabel = { recap: "Weekly review", preview: "Week preview", live: "Live Sunday", offseason: "Offseason" }[wm.mode] || "Weekly review";
@@ -119,7 +137,7 @@ function renderHome(d) {
     `${renderScoreboard(d)}<div class="home-layout"><div class="home-main">
     ${lead ? `<article class="lead${banterLead ? " lead-banter" : ""}"><div class="lead-copy"><span class="eyebrow">${esc(leadEyebrow)}</span><h1><a href="#story/${esc(lead.id)}" data-story="${esc(lead.id)}">${esc(lead.headline)}</a></h1><p class="lead-dek">${esc(lead.dek)}</p><div class="lead-meta">XClub / League desk</div>${storyLink(lead, leadCta)}</div>${featureArt(lead)}</article>` : intro("The new season", "Every week starts here.", "The first completed scores will bring the weekly review. Until then, take a look at the matchups and starting lineups.")}
     ${awardStrip(d)}
-    ${(() => { const wk = d.weekend || {}; const close = wk.closeCount || 0; const total = (wk.games || []).length; return total ? `<section class="hype-banner"><span class="eyebrow">This weekend</span><strong>Week ${wk.week || "—"}: ${total} matchups${close ? ` · ${close} projected within 5 points` : ""}</strong><a class="text-link" href="#weekend">Open the hype page →</a></section>` : ""; })()}
+    ${homeHypeSection(d)}
     <div class="story-grid">${selectStories(["fine-margins", "bench-notebook", "next-week"]).map(storyCard).join("")}</div>
     <section class="feature-row">${head(`Week ${d.last_week?.week || "—"} standouts`, "Starting lineups only")}<div class="players-preview">${
       (d.last_week?.top_performers || [])
@@ -229,7 +247,7 @@ function renderWeekend(d) {
     ${recapHead}
     <p class="context-note">Pre-game lines use Sleeper's standard projections — an edge is a points gap, not a win probability. Recaps are built from the final box score, including hindsight bench swings. Injury chips are status flags — verify before kickoff.</p>`;
 }
-function featuredCard(c, d) {
+function featuredCard(c, d, titleId = "featTitle") {
   const wm = d.week_mode || {};
   const isRecap = wm.mode === "recap";
   const sideLine = (s) => {
@@ -262,10 +280,10 @@ function featuredCard(c, d) {
   const leaves = c.leaves
     ? `<div class="feat-leaves small">Where it leaves them: ${esc(c.leaves.a.rec)} at #${c.leaves.a.rank ?? "—"} · ${esc(c.leaves.b.rec)} at #${c.leaves.b.rank ?? "—"}</div>`
     : "";
-  return `<section class="feat" aria-labelledby="featTitle">${head("Matchup of the week", c.week ? `Week ${c.week}` : "")}
+  return `<section class="feat" aria-labelledby="${esc(titleId)}">${head("Matchup of the week", c.week ? `Week ${c.week}` : "")}
     <article class="feat-card">
       <div class="feat-scores">${sideLine(c.a)}<div class="feat-vs" aria-hidden="true">${isRecap ? "final" : "vs"}</div>${sideLine(c.b)}</div>
-      <h3 id="featTitle">${esc(headline)}</h3>
+      <h3 id="${esc(titleId)}">${esc(headline)}</h3>
       <p class="feat-dek">${esc(dek)}</p>
       ${topLine}${battle}${decidedBy}${leaves}
       <a class="text-link feat-open" href="#game/${c.week}/${c.mid}">Open the full matchup box →</a>

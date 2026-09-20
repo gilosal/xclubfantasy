@@ -79,8 +79,9 @@ pre-rebuild baseline in `qa/before/`.
 - Hermes script-only cron **XClub Player Metadata Refresh** runs daily at 8:00 AM America/Toronto. On this native-Windows host it uses
   `xclub_player_metadata_refresh.py` (not the Git-Bash/WSL `.sh` convenience wrapper). It fetches the
   live Sleeper `/players/nfl` dump, atomically rebuilds `public/data/players.json`, verifies every
-  numeric bundle record's NFL team/injury/position fields against Sleeper, deploys only the
-  validated artifact, and checks the production timestamp. Success is silent; failures alert.
+  numeric bundle record's NFL team/injury/position fields against the same Sleeper snapshot used
+  to build it, deploys only the validated artifact, and checks the production timestamp. Success is
+  silent; failures alert.
 - `GET /api/data` serves KV cache; `GET /api/data?refresh=1` force-rebuilds, rate-limited to
   once per 10 min (KV key `last_build_ts`).
 - The payload cache key includes both the `BUILD` const and the imported player-bundle timestamp,
