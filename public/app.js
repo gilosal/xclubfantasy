@@ -94,6 +94,19 @@ function featureArt(a) {
 function storyCard(a) {
   return `<article class="story-card"><span class="eyebrow">${esc(a.tag)}</span><h3><a href="#story/${esc(a.id)}" data-story="${esc(a.id)}">${esc(a.headline)}</a></h3><p>${esc(a.dek)}</p>${storyLink(a)}</article>`;
 }
+function slateDeskSection(d) {
+  const slate = d.slate || [];
+  if (!slate.length) return "";
+  const wm = d.week_mode || {};
+  const label =
+    wm.mode === "live"
+      ? `Week ${wm.week} · live from the Sunday slate`
+      : wm.mode === "preview"
+        ? `Week ${wm.nextWeek ?? "—"} · queued for Sunday`
+        : "This slate";
+  const cards = slate.slice(0, 4).map((a) => storyCard(a)).join("");
+  return `<section class="slate-desk" aria-label="The Slate desk">${head("The Slate desk", label)}<div class="story-grid">${cards}</div></section>`;
+}
 function homeHypeSection(d) {
   const n = d.weekend_narrative || {};
   const pre = Array.isArray(n.pre) ? n.pre : [];
@@ -138,6 +151,7 @@ function renderHome(d) {
     ${lead ? `<article class="lead${banterLead ? " lead-banter" : ""}"><div class="lead-copy"><span class="eyebrow">${esc(leadEyebrow)}</span><h1><a href="#story/${esc(lead.id)}" data-story="${esc(lead.id)}">${esc(lead.headline)}</a></h1><p class="lead-dek">${esc(lead.dek)}</p><div class="lead-meta">XClub / League desk</div>${storyLink(lead, leadCta)}</div>${featureArt(lead)}</article>` : intro("The new season", "Every week starts here.", "The first completed scores will bring the weekly review. Until then, take a look at the matchups and starting lineups.")}
     ${awardStrip(d)}
     ${homeHypeSection(d)}
+    ${slateDeskSection(d)}
     <div class="story-grid">${selectStories(["fine-margins", "bench-notebook", "next-week"]).map(storyCard).join("")}</div>
     <section class="feature-row">${head(`Week ${d.last_week?.week || "—"} standouts`, "Starting lineups only")}<div class="players-preview">${
       (d.last_week?.top_performers || [])
@@ -555,7 +569,13 @@ function renderHistory(d) {
       )}</div></section>${d.draft ? `<section class="feature-row">${head("The draft ledger", `${d.season} draft · Week ${d.last_week?.week || "—"} points`)}<p class="context-note">One week's return is not a final draft grade. These are actual league player points, whether started or benched; missing scores stay blank.</p><div class="draft-grid">${draftGroup("Late-round returns", "Round 8 and later, ordered by weekly output.", d.draft.steals)}${draftGroup("A quiet week", "Lowest recorded scores from Rounds 1–3. Not a bust verdict.", d.draft.busts)}${draftGroup("The first round", "In draft order, not ranked against other positions.", d.draft.first_round)}</div></section>` : ""}`;
 }
 function showArticle(id) {
-  const a = DATA.articles.find((a) => a.id === id);
+  // Slate desk articles (the Sunday queue) live in DATA.slate, and last
+  // week's final queue in DATA.slate_final (deep links survive rollover).
+  const a = [
+    ...(DATA.articles || []),
+    ...(DATA.slate || []),
+    ...(DATA.slate_final || []),
+  ].find((x) => x.id === id);
   if (!a) {
     location.hash = "home";
     return;
@@ -563,8 +583,11 @@ function showArticle(id) {
   const satireNote = a.satire
     ? `<p class="satire-note">This is league banter. The statistics are real and come from the league's public Sleeper data; the motives, personality, and quotes are invented for effect and are not attributed to anyone.</p>`
     : "";
+  const hero = a.hero
+    ? `<img class="article-hero" src="${esc(a.hero.src)}" alt="${esc(a.hero.alt || a.headline)}" width="280" height="280">`
+    : "";
   $("articleContent").innerHTML =
-    `<span class="eyebrow">${esc(a.tag)} · ${DATA.season}</span>${satireNote}<h1 id="articleTitle">${esc(a.headline)}</h1><p class="article-dek">${esc(a.dek)}</p><div class="article-byline">${esc(a.byline)} · Updated ${esc(date(DATA.asof))} ET</div><div class="article-body">${a.body
+    `${hero}<span class="eyebrow">${esc(a.tag)} · ${DATA.season}</span>${satireNote}<h1 id="articleTitle">${esc(a.headline)}</h1><p class="article-dek">${esc(a.dek)}</p><div class="article-byline">${esc(a.byline)} · Updated ${esc(date(DATA.asof))} ET</div><div class="article-body">${a.body
       .split("\n\n")
       .map((p) => `<p>${esc(p)}</p>`)
       .join("")}</div><div class="article-source">${a.satire

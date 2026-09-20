@@ -54,6 +54,7 @@ test("baker-decree is emitted when Emery starts Baker and faces Tuten Hurts", ()
   assert.equal(lead.satire, true);
   assert.equal(lead.tag, "League banter");
   assert.equal(lead.rid, 7);
+  assert.equal(lead.hero?.src, "/memes/baker-decree.gif", "meme hero attached");
   // real stats are woven in
   assert.ok(lead.body.includes("108.00"), "Emery week-1 points");
   assert.ok(lead.body.includes("11.64"), "Baker week-1 bench points");

@@ -67,6 +67,23 @@ export const INJURY_ORDER = ["O", "IR", "IR-R", "SUS", "D", "SSPD", "Q", "DNP", 
 const recStr = (t) => `${t.wins}-${t.losses}${t.ties ? `-${t.ties}` : ""}`;
 const num2 = (n) => (Number.isFinite(n) ? n.toFixed(2) : "—");
 
+/** Same one-player bench logic as bestBenchSwap, but on projections — the
+ *  preview/live equivalent, used by the slate desk before scores exist. */
+export function bestProjBenchSwap(side) {
+  let best = null;
+  for (const bench of side.bench || [])
+    for (const starter of side.starters || []) {
+      const allowed = ELIGIBLE[starter.slot] || [starter.slot || starter.pos];
+      if (!(bench.positions || [bench.pos]).some((p) => allowed.includes(p)))
+        continue;
+      if (bench.proj == null || starter.proj == null) continue;
+      const gain = round(bench.proj - starter.proj);
+      if (gain > 0 && (!best || gain > best.gain))
+        best = { bench, starter, gain };
+    }
+  return best;
+}
+
 /** Which mode should the homepage lead with? Data-driven, never invented. */
 export function weekMode(d) {
   const status = d.next_week?.status || "upcoming";
@@ -569,6 +586,250 @@ export function featuredMatchup(d, narrative) {
   return null;
 }
 
+/**
+ * The Slate desk — the Sunday article queue.
+ *
+ * A deterministic, fully factual article pack for the slate of games being
+ * covered right now. Every number comes from the payload (Sleeper league
+ * data); no motives, quotes, or updates are invented. The queue runs on a
+ * fixed Sunday schedule: articles appear at the 4pm cutoff and are rebuilt
+ * from the same data pipeline once the remaining games (late/MNF) finalize.
+ *
+ * Articles emitted (each has its own #story/ route):
+ *  - `w{N}-slate`   The slate: every matchup, with projected edges and one
+ *                   standout line from each game.
+ *  - `w{N}-edge`    Edge watch: the closest projected finish, with the two
+ *                   largest individual projections that make the gap hang in
+ *                   the balance.
+ *  - `w{N}-bench`   Bench chess: the biggest legal one-player bench swing by
+ *                   projection on the slate.
+ *  - `w{N}-decider` The decider (live, and final after rollover): the closest
+ *                   live or final finish, plus the hindsight bench swing that
+ *                   would have flipped or covered it.
+ *
+ * The same builder powers `slateFinalArticles` (the completed week), so the
+ * queue's deep links keep resolving after the slate rolls over.
+ *
+ * Returns [] when there is no slate to cover.
+ */
+export function slateArticles(d) {
+  return slateDesk(
+    d.next_week || { week: null, status: "upcoming", games: [] },
+    d,
+  );
+}
+
+/**
+ * The final slate article pack for the completed week, so the queue's deep
+ * links (e.g. #story/w2-slate) keep resolving after the week rolls over.
+ * Same deterministic pipeline, phase "final".
+ */
+export function slateFinalArticles(d) {
+  const lw = d.last_week || { week: null, games: [] };
+  if (!lw.week || !(lw.games || []).length) return [];
+  return slateDesk({ week: lw.week, status: "complete", games: lw.games }, d, "final");
+}
+
+function slateDesk(nw, d, phaseOverride) {
+  const week = nw.week;
+  if (!week) return [];
+  const games = nw.games || [];
+  const status = nw.status || "upcoming";
+  const phase =
+    phaseOverride ||
+    (status === "in_progress" ? "live" : status === "complete" ? "final" : "preview");
+  const live = phase === "live";
+  const base = {
+    byline: "XClub • League desk",
+    source_url: d.league.url,
+    source_label: "Sleeper league data",
+    week,
+  };
+  const articles = [];
+
+  // ---- The slate ----------------------------------------------------------
+  if (games.length) {
+    const withProj = games.filter((g) => g.a.proj_total != null && g.b.proj_total != null);
+    const rows = [...games]
+      .sort((a, b) => a.mid - b.mid)
+      .map((g) => {
+        if (phase === "final") {
+          const winner = g.a.pts >= g.b.pts ? g.a : g.b;
+          const top = [...(g.a.starters || []), ...(g.b.starters || [])]
+            .filter((p) => p.pts != null)
+            .sort((x, y) => y.pts - x.pts)[0];
+          const topTxt = top ? `${top.name} with ${fmt(top.pts)} for ${top.team}` : "no individual lines recorded";
+          return `${g.a.team} vs. ${g.b.team}: final ${fmt(g.a.pts)}–${fmt(g.b.pts)} (${winner.team} won by ${fmt(Math.abs(g.a.pts - g.b.pts))}); top line ${topTxt}.`;
+        }
+        const pa = g.a.proj_total,
+          pb = g.b.proj_total;
+        const projTxt =
+          pa != null && pb != null
+            ? `${fmt(pa)}–${fmt(pb)} (${pa >= pb ? g.a.team : g.b.team} the projected favorite, by ${fmt(Math.abs(pa - pb))})`
+            : "projections pending";
+        const top = [...(g.a.starters || []), ...(g.b.starters || [])]
+          .filter((p) => p.proj != null)
+          .sort((x, y) => y.proj - x.proj)[0];
+        const topTxt = top ? `${top.name} at ${fmt(top.proj)}` : "no individual estimates yet";
+        const scoreTxt =
+          live
+            ? ` currently ${fmt(g.a.pts)}–${fmt(g.b.pts)}`
+            : "";
+        return `${g.a.team} vs. ${g.b.team}: ${projTxt}; standout ${topTxt}${scoreTxt}.`;
+      });
+    articles.push({
+      id: `w${week}-slate`,
+      tag: "Slate desk",
+      headline:
+        phase === "final"
+          ? `Week ${week} slate: how all ${games.length} matchups finished`
+          : `Week ${week} slate: ${games.length} matchups, one at a time`,
+      dek:
+        phase === "final"
+          ? `Every game on the Week ${week} slate with its final score and the top line of the box.`
+          : `Every game on the Week ${week} slate with its projected edge and a standout line${live ? ", plus the running score" : ""}. ${withProj.length} of ${games.length} have complete projections.`,
+      body: [
+        phase === "final"
+          ? `The Week ${week} slate is in the books. ${games.length} matchups; the numbers below are final league scores.`
+          : `${live ? "The slate is live right now." : "Here is the full slate for Week " + week + "."} ${games.length} matchups, ${withProj.length} with complete projection coverage. Edges are points gaps from Sleeper's standard scoring, not win probabilities.`,
+        ...rows,
+        phase === "final"
+          ? "The matchup view always shows the full box behind every score."
+          : "Lineups are snapshots and can move before lock; the matchup view always shows the current box.",
+      ].join("\n\n"),
+      ...base,
+      rid: null,
+    });
+  }
+
+  // ---- Edge watch (pregame only) ------------------------------------------
+  const projGames =
+    phase === "final"
+      ? []
+      : games
+          .filter((g) => g.a.proj_total != null && g.b.proj_total != null)
+          .map((g) => ({ g, edge: round(Math.abs(g.a.proj_total - g.b.proj_total)) }))
+          .sort((x, y) => x.edge - y.edge || x.g.mid - y.g.mid);
+  if (projGames.length) {
+    const { g, edge } = projGames[0];
+    const hi = g.a.proj_total >= g.b.proj_total ? g.a : g.b;
+    const lo = hi === g.a ? g.b : g.a;
+    const leaders = [...(hi.starters || []), ...(lo.starters || [])]
+      .filter((p) => p.proj != null)
+      .sort((x, y) => y.proj - x.proj)
+      .slice(0, 2);
+    articles.push({
+      id: `w${week}-edge`,
+      tag: "Slate desk",
+      headline: `${hi.team} vs. ${lo.team}: the slate's tightest projected finish`,
+      dek: `${fmt(edge)} points separate ${fmt(hi.proj_total)} for ${hi.team} and ${fmt(lo.proj_total)} for ${lo.team} — the smallest projected gap on the Week ${week} slate.`,
+      body: [
+        `${hi.team} projects for ${fmt(hi.proj_total)} points and ${lo.team} for ${fmt(lo.proj_total)}, a ${fmt(edge)}-point edge — the closest projected finish of the ${games.length} games on the Week ${week} slate.`,
+        leaders.length
+          ? `${leaders.map((p) => `${p.name} (${fmt(p.proj)})`).join(" and ")} carry the largest individual projections across the two lineups. A single unexpected scoreline — a fourth-down stop, a long return, a late lineup change — can erase a gap this size. A one-point projected edge and a ten-point one are not the same game.`
+          : "Individual projections are not complete for both lineups, so the team-level gap is the only number to weigh.",
+        live
+          ? `The score so far: ${fmt(g.a.pts)}–${fmt(g.b.pts)}. Projections are a morning snapshot; the running score is the live number from the league data.`
+          : phase === "final"
+            ? `The final: ${fmt(g.a.pts)}–${fmt(g.b.pts)}. The morning estimate had the gap at ${fmt(edge)} points; the final margin came in at ${fmt(round(Math.abs(g.a.pts - g.b.pts)))}.`
+            : "Projections use Sleeper standard-scoring estimates, not betting odds or win probabilities. League-specific scoring — particularly kicker rules — can differ, and lineups may change before kickoff.",
+      ].join("\n\n"),
+      ...base,
+      rid: hi.rid,
+    });
+  }
+
+  // ---- Bench chess (pregame information only) ----------------------------
+  const swaps =
+    phase === "final"
+      ? []
+      : games
+          .flatMap((g) => [g.a, g.b])
+          .map((s) => ({ side: s, swap: bestProjBenchSwap(s) }))
+          .filter((x) => x.swap && x.side.proj_total != null)
+          .sort((a, b) => b.swap.gain - a.swap.gain);
+  if (swaps.length) {
+    const { side, swap } = swaps[0];
+    const game = gOf(games, side);
+    const opp = game ? (game.a.rid === side.rid ? game.b : game.a) : null;
+    const oppEdge = edgeOf(games, game);
+    const newEdge =
+      oppEdge != null && opp && side.proj_total != null
+        ? round(Math.abs(side.proj_total + swap.gain - (side === game.a ? game.b : game.a).proj_total))
+        : null;
+    articles.push({
+      id: `w${week}-bench`,
+      tag: "Slate desk",
+      headline: `${swap.bench.name}'s ${fmt(swap.bench.proj)}-point projection sits on ${side.team}'s bench`,
+      dek: `The slate's biggest legal bench swing: ${fmt(swap.gain)} points over ${swap.starter.name} in the ${swap.starter.slot} slot for ${side.team}${opp ? `, playing ${opp.team}` : ""}.`,
+      body: [
+        `${swap.bench.name} projects for ${fmt(swap.bench.proj)} points while ${swap.starter.name}, the ${swap.starter.slot} starter, projects for ${fmt(swap.starter.proj)}. Of every legal one-player, position-eligible bench replacement on the Week ${week} slate, that is the biggest swing.`,
+        `Taking it would move ${side.team} from ${fmt(side.proj_total)} projected points to ${fmt(round(side.proj_total + swap.gain))}${newEdge != null && oppEdge != null ? ` and move ${side.team}'s projected gap against ${opp.team} from ${fmt(oppEdge)} to ${fmt(newEdge)}` : ""}. It is a one-change comparison, not an optimal-lineup calculation.`,
+        "Bench chess is about information: the projection gap is what was knowable before kickoff. The matchup box always shows the final, post-factum version of this same calculation.",
+      ].join("\n\n"),
+      ...base,
+      rid: side.rid,
+    });
+  }
+
+  // ---- The decider (live and final) ---------------------------------------
+  if (live || phase === "final") {
+    const scored = games.filter((g) => Number(g.a.pts) > 0 || Number(g.b.pts) > 0);
+    const decider = [...scored]
+      .filter((g) => g.a.pts !== g.b.pts)
+      .sort((a, b) => Math.abs(a.a.pts - a.b.pts) - Math.abs(b.a.pts - b.b.pts) || a.mid - b.mid)[0];
+    if (decider) {
+      const winner = decider.a.pts > decider.b.pts ? decider.a : decider.b;
+      const loser = winner === decider.a ? decider.b : decider.a;
+      const margin = round(Math.abs(winner.pts - loser.pts));
+      const topAll = [...(decider.a.starters || []), ...(decider.b.starters || [])]
+        .filter((p) => p.pts != null)
+        .sort((x, y) => y.pts - x.pts)[0];
+      const swap = bestBenchSwap(loser);
+      articles.push({
+        id: `w${week}-decider`,
+        tag: "Slate desk",
+        headline: live
+          ? `${winner.team} leads ${loser.team} by ${fmt(margin)} — the slate's closest live finish`
+          : `${winner.team} beats ${loser.team} by ${fmt(margin)} — the slate's closest finish`,
+        dek: live
+          ? `${fmt(winner.pts)}–${fmt(loser.pts)} right now${topAll ? `, with ${topAll.name} the biggest line of the game at ${fmt(topAll.pts)}` : ""}. The smallest live margin of the Week ${week} slate.`
+          : `${fmt(winner.pts)}–${fmt(loser.pts)} final${topAll ? `, with ${topAll.name} the biggest line of the game at ${fmt(topAll.pts)}` : ""}. The smallest margin of the Week ${week} slate.`,
+        body: [
+          live
+            ? `${winner.team} leads ${loser.team} ${fmt(winner.pts)} to ${fmt(loser.pts)} — a ${fmt(margin)}-point margin, the closest live finish among the ${scored.length} games with scores so far this Sunday.`
+            : `${winner.team} beat ${loser.team} ${fmt(winner.pts)} to ${fmt(loser.pts)} — a ${fmt(margin)}-point margin, the closest finish of the ${scored.length} games in the Week ${week} slate.`,
+          topAll
+            ? `${topAll.name} had the biggest individual line of the matchup at ${fmt(topAll.pts)} points${topAll.team === winner.team ? " for the team ahead" : " for the team behind"}.`
+            : "",
+          swap
+            ? live
+              ? `The hindsight swing: ${swap.bench.name} has ${fmt(swap.bench.pts)} points on ${loser.team}'s bench against ${swap.starter.name}'s ${fmt(swap.starter.pts)} — ${fmt(swap.gain)} points that would have ${swap.gain > margin ? "flipped" : swap.gain === margin ? "tied" : "narrowed"} the game. This is the running score, not a final result.`
+              : `The hindsight swing: ${swap.bench.name} had ${fmt(swap.bench.pts)} points on ${loser.team}'s bench against ${swap.starter.name}'s ${fmt(swap.starter.pts)} — ${fmt(swap.gain)} points that would have ${swap.gain > margin ? "flipped" : swap.gain === margin ? "tied" : "narrowed"} the final result.`
+            : "No single legal bench replacement leads the box; the margin belongs to the lineups as locked.",
+          live
+            ? "Scores update as the league data refreshes; this article re-builds from the same pipeline at the end of the Sunday slate, when the final numbers are in."
+            : "This is the final number, from the league's completed box score.",
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
+        ...base,
+        rid: winner.rid,
+      });
+    }
+  }
+
+  return articles;
+}
+function gOf(games, side) {
+  return (games || []).find((g) => g.a.rid === side.rid || g.b.rid === side.rid) || null;
+}
+function edgeOf(games, game) {
+  const g = gOf(games, game);
+  if (!g || g.a.proj_total == null || g.b.proj_total == null) return null;
+  return round(Math.abs(g.a.proj_total - g.b.proj_total));
+}
+
 /** Per-URL og:title/og:description for link cards (WhatsApp, X, etc.). */
 export function ogMeta(pathname, d) {
   const nw = d?.next_week || {};
@@ -812,6 +1073,10 @@ function bakerDecree(d, add) {
       rid: emery.rid,
       satire: true,
       source_label: "Statistics from the public league data; motives and quotes invented for effect.",
+      hero: {
+        src: "/memes/baker-decree.gif",
+        alt: "League-minted meme: a Bucswear-wearing Baker Mayfield with his arms spread wide",
+      },
     },
   );
   return true;

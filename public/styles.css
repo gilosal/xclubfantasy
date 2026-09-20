@@ -2084,6 +2084,17 @@ dialog::backdrop {
   margin-top: 14px;
   letter-spacing: -0.8px;
 }
+/* League-minted meme banner for banter leads: a self-contained block above
+   the headline so the joke sets the tone before the byline does. */
+.article-hero {
+  display: block;
+  width: 100%;
+  max-width: 340px;
+  margin: 0 0 20px;
+  border: 1px solid var(--line);
+  border-bottom: 4px solid var(--red);
+  background: var(--art-bg);
+}
 .satire-note {
   font: 12px/1.6 var(--sans);
   letter-spacing: 0.3px;

@@ -22,6 +22,8 @@ import {
   waiverDesk,
   ogMeta,
   buildEditorial,
+  slateArticles,
+  slateFinalArticles,
 } from "./domain.js";
 
 const LID = "1371971946459201536";
@@ -560,6 +562,11 @@ export async function buildPayload() {
   payload.featured = featuredMatchup(payload, payload.weekend_narrative);
   payload.waivers = waiverDesk(payload);
   payload.articles = buildEditorial(payload);
+  // The Slate desk: the Sunday article queue for the slate being covered
+  // right now (preview -> live). slate_final keeps the previous week's queue
+  // alive (final phase) so deep links like #story/w2-slate survive rollover.
+  payload.slate = slateArticles(payload);
+  payload.slate_final = slateFinalArticles(payload);
   return payload;
 }
 

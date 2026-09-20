@@ -111,6 +111,27 @@ wire moves. Every number traces to the league payload; nothing is invented.
 - **Degradation ladder:** the builder trims sections (injuries, then moves, then preview detail)
   to fit Discord's 2000-char limit, always preserving the scoreboard + factual disclaimer.
 
+## The Slate desk (Sunday article queue)
+The repeatable, unattended article workflow Rob asked for: a fresh pack of factual articles
+for the slate of games being covered, rebuilt on the same 5-minute live pipeline the rest of
+the hub uses. `slateArticles()` (preview/live) and `slateFinalArticles()` (the just-completed
+week, so deep links survive rollover) are deterministic and fully factual — every number traces
+to the public league payload, nothing is invented.
+
+- **Articles** (each has its own `#story/` route, shown as a "Slate desk" card on Home):
+  - `w{N}-slate` — every matchup with its projected edge and a standout line (running score when live, finals when done).
+  - `w{N}-edge` — the slate's tightest projected finish, with the two biggest individual projections.
+  - `w{N}-bench` — the slate's biggest legal one-player bench swing by projection.
+  - `w{N}-decider` — the closest live finish (and the closest final finish after rollover), plus the hindsight bench swing.
+- **Cadence:** two Hermes script-only (`no_agent`) cron jobs announce the queue to the origin
+  Discord channel — **Sunday 16:00 ET** (`0 16 * * 0`, the 4pm cutoff, `xclub_slate_queue.py`)
+  and **Sunday 23:00 ET** (`0 23 * * 0`, `xclub_slate_final.py`), the latter waiting up to 150 min
+  for the slate (incl. MNF) to fully score before posting the final pack. Both are silent when
+  there is no slate / it has not finalized.
+- **Why no build/deploy per article:** the articles are computed live by the Worker on each
+  `/api/data` refresh, so the 4pm queue and the late-Sunday refresh are the same pipeline — no
+  interactive agent step, no per-article deploy. The cron jobs only announce + deep-link.
+
 ## Sleeper API notes (verified 2026-09-16)
 - League is standard scoring → use `pts_std` in stats/projections.
 - DEF pids: rosters use plain abbr (`KC`), stats/projections use `TEAM_KC` — normalized in
