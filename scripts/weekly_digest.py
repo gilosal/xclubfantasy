@@ -24,7 +24,7 @@ SITE = os.environ.get("XCLUB_SITE", "https://xclubfantasy.robsplex.com")
 API = SITE + "/api/data"
 STATE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "digest_state.json")
 MAX_LEN = 2000  # Discord message limit
-WAIT_MINUTES = 60  # finalization grace: re-check every 5 min for up to 60 min (MNF can score after midnight)
+WAIT_MINUTES = 50  # finalization grace: re-check every 5 min, capped under the 60-min cron script timeout
 
 AWARD_EMOJI = {
     "team-of-the-week": "🏆",
@@ -67,11 +67,13 @@ def is_finalized(data):
         return False
     if data.get("completed_week") != week:
         return False
+    # Season over: no next week to check.
     if week >= 18:
         return True
+    # The league has rolled past the recap week. We do NOT gate on
+    # next_week.status — a live next-week slate must not block delivering
+    # the recap of the already-completed week.
     if (nw.get("week") or 0) <= week:
-        return False
-    if nw.get("status") == "in_progress":
         return False
     return True
 

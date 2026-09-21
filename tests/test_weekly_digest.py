@@ -106,10 +106,12 @@ class IsFinalizedTests(unittest.TestCase):
     def test_finalized_true(self):
         self.assertTrue(wd.is_finalized(fixture_finalized()))
 
-    def test_not_finalized_when_next_in_progress(self):
+    def test_finalized_even_when_next_in_progress(self):
+        # A completed week is deliverable even while the next slate is live.
+        # (A live next-week slate must not block the recap of the completed week.)
         d = fixture_finalized()
         d["next_week"]["status"] = "in_progress"
-        self.assertFalse(wd.is_finalized(d))
+        self.assertTrue(wd.is_finalized(d))
 
     def test_not_finalized_when_completed_week_mismatch(self):
         d = fixture_finalized()
@@ -293,13 +295,25 @@ class MainFlowTests(unittest.TestCase):
         self.assertEqual(out2.strip(), "")
 
     def test_auto_silent_when_not_finalized(self):
+        # Truly-not-finalized: the completed_week counter hasn't caught up to
+        # the recap week, so the slate isn't fully scored yet.
         d = fixture_finalized()
-        d["next_week"]["status"] = "in_progress"
+        d["completed_week"] = 2
         self._patch_fetch(d)
         code, out = self._run_main([])
         self.assertEqual(code, 0)
         self.assertEqual(out.strip(), "")
         self.assertFalse(os.path.exists(self._state_file))
+
+    def test_auto_prints_when_completed_and_next_live(self):
+        # The real-world case that used to wedge: completed week with a live
+        # next-week slate. Must deliver, not wait silently.
+        d = fixture_finalized()
+        d["next_week"]["status"] = "in_progress"
+        self._patch_fetch(d)
+        code, out = self._run_main([])
+        self.assertEqual(code, 0)
+        self.assertIn("Week 3 Recap", out)
 
     def test_dry_run_prints_immediately_without_state(self):
         d = fixture_finalized()
