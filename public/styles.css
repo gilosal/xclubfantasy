@@ -2615,3 +2615,69 @@ dialog::backdrop {
     display: none;
   }
 }
+
+/* Thursday Night Football feature card */
+.tnf-feature {
+  background: linear-gradient(135deg, var(--accent-2) 0%, var(--surface-1) 100%);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.tnf-badge {
+  display: inline-block;
+  background: var(--accent-1);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+.tnf-headline {
+  font-size: 18px;
+  margin: 8px 0 12px;
+}
+.tnf-matchup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.tnf-side {
+  flex: 1;
+  min-width: 120px;
+  text-align: center;
+}
+.tnf-fav {
+  color: var(--accent-1);
+}
+.tnf-pts {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--accent-1);
+}
+.tnf-vs {
+  font-weight: 700;
+  color: var(--muted);
+  font-size: 14px;
+}
+.tnf-team {
+  display: block;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+}
+.tnf-meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.tnf-copy {
+  margin: 10px 0 6px;
+  font-size: 13px;
+}
+.tnf-foot {
+  font-size: 12px;
+  margin-top: 8px;
+}

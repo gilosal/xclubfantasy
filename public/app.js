@@ -94,6 +94,42 @@ function featureArt(a) {
 function storyCard(a) {
   return `<article class="story-card"><span class="eyebrow">${esc(a.tag)}</span><h3><a href="#story/${esc(a.id)}" data-story="${esc(a.id)}">${esc(a.headline)}</a></h3><p>${esc(a.dek)}</p>${storyLink(a)}</article>`;
 }
+function tnfCard(d) {
+  const nw = d.next_week || {};
+  const games = nw.games || [];
+  const tnfGame = games.find((g) => String(g.mid) === "1");
+  if (!tnfGame) return "";
+  const a = tnfGame.a || {}, b = tnfGame.b || {};
+  const fav = (a.proj_total ?? Infinity) <= (b.proj_total ?? Infinity) ? a : b;
+  const gap = Math.abs((a.proj_total || 0) - (b.proj_total || 0));
+  const favText = fav.proj_total != null
+    ? `${esc(fav.team)} +${f(gap)}`
+    : "open";
+  const projCovered = tnfGame.a.proj_covered ?? 0;
+  const projSlots = tnfGame.a.proj_slots ?? 0;
+  return `<section class="tnf-feature" aria-label="Thursday Night Football">
+    <div class="tnf-badge">🏈 TNF</div>
+    <h3 class="tnf-headline">Thursday Night Football — Week ${nw.week}</h3>
+    <div class="tnf-matchup">
+      <div class="tnf-side ${fav.rid === a.rid ? "tnf-fav" : ""}">
+        <div class="tnf-pts">${fav.proj_total != null ? f(fav.proj_total) : "—"}</div>
+        <a class="tnf-team" href="#team/${a.rid}">${esc(a.team)}</a>
+        <div class="tnf-meta">${fav.proj_total != null ? "+ " + f(gap) : ""}</div>
+      </div>
+      <div class="tnf-vs">vs</div>
+      <div class="tnf-side">
+        <div class="tnf-pts">${fav.proj_total != null ? f(fav.proj_total - gap) : "—"}</div>
+        <a class="tnf-team" href="#team/${b.rid}">${esc(b.team)}</a>
+      </div>
+    </div>
+    <p class="tnf-copy">
+      ${esc(a.team)} vs. ${esc(b.team)}
+      ${fav.proj_total != null ? ` · ${esc(fav.team)} +${f(gap)} (${projCovered}/${projSlots} estimates)` : " · Projections pending"}
+    </p>
+    <div class="tnf-foot"><a class="text-link" href="#game/${nw.week}/${tnfGame.mid}">Full matchup →</a></div>
+  </section>`;
+}
+
 function slateDeskSection(d) {
   const slate = d.slate || [];
   if (!slate.length) return "";
@@ -151,6 +187,7 @@ function renderHome(d) {
     ${lead ? `<article class="lead${banterLead ? " lead-banter" : ""}"><div class="lead-copy"><span class="eyebrow">${esc(leadEyebrow)}</span><h1><a href="#story/${esc(lead.id)}" data-story="${esc(lead.id)}">${esc(lead.headline)}</a></h1><p class="lead-dek">${esc(lead.dek)}</p><div class="lead-meta">XClub / League desk</div>${storyLink(lead, leadCta)}</div>${featureArt(lead)}</article>` : intro("The new season", "Every week starts here.", "The first completed scores will bring the weekly review. Until then, take a look at the matchups and starting lineups.")}
     ${awardStrip(d)}
     ${homeHypeSection(d)}
+    ${tnfCard(d)}
     ${slateDeskSection(d)}
     <div class="story-grid">${selectStories(["fine-margins", "bench-notebook", "next-week"]).map(storyCard).join("")}</div>
     <section class="feature-row">${head(`Week ${d.last_week?.week || "—"} standouts`, "Starting lineups only")}<div class="players-preview">${
@@ -253,11 +290,14 @@ function renderWeekend(d) {
   const recapHead = n.lwWeek != null && n.recap.length
     ? `<section>${head(`Last weekend — Week ${n.lwWeek}`, "How each game actually played out")}${recap}</section>`
     : "";
+  const tnfSection = d.next_week?.status === "upcoming" ? tnfCard(d) : "";
+  const preSection = preHead || `<section><div class="empty">No matchups scheduled this week.</div></section>`;
   $("view-weekend").innerHTML =
     `${intro("The weekend, told match-up by match-up", n.week ? `Week ${n.week} hype, plus the story from Week ${n.lwWeek}.` : "Week-by-week stories.")}
     <button id="shareWeekend" class="solid-button">Share this hype page</button>
     ${feat ? featuredCard(feat, d) : ""}
-    ${preHead}
+    ${tnfSection}
+    ${preSection}
     ${recapHead}
     <p class="context-note">Pre-game lines use Sleeper's standard projections — an edge is a points gap, not a win probability. Recaps are built from the final box score, including hindsight bench swings. Injury chips are status flags — verify before kickoff.</p>`;
 }
