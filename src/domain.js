@@ -560,10 +560,11 @@ export function featuredMatchup(d, narrative) {
   const mode = weekMode(d).mode;
   const rankOf = new Map((d.standings || []).map((s) => [String(s.rid), s.rank ?? 99]));
   const rankDiff = (c) => Math.abs((rankOf.get(String(c.a?.rid)) ?? 99) - (rankOf.get(String(c.b?.rid)) ?? 99));
-  if (mode === "preview" || mode === "live") {
-    const pool = (n.pre || []).filter((c) => c.edge != null);
-    if (!pool.length) return null;
-    const best = pool
+  // Always prefer the upcoming week's closest projected finish. Only fall
+  // back to the recap pool when there is no upcoming slate at all.
+  const upcomingPre = (n.pre || []).filter((c) => c.edge != null);
+  if (upcomingPre.length) {
+    const best = upcomingPre
       .slice()
       .sort(
         (a, b) =>

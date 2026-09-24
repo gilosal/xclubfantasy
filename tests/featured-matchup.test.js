@@ -51,7 +51,8 @@ const previewBase = {
 };
 
 // One completed week behind, next week upcoming: weekMode is "recap", so the
-// feature comes from the finished slate's margins.
+// feature comes from the finished slate's margins (unless a next week with
+// projections exists).
 const recapBase = {
   ...previewBase,
   current_week: 2,
@@ -68,6 +69,29 @@ const recapBase = {
   },
   next_week: { week: 2, status: "upcoming", games: [] },
 };
+
+// Same recap scenario but with projections for next week: upcoming pool
+// wins over recap because it's the week that matters to fans now.
+const recapWithUpcoming = {
+  ...recapBase,
+  next_week: {
+    week: 2,
+    status: "upcoming",
+    games: [
+      { mid: 20, a: side("1", "Team A", 105, null), b: side("2", "Team B", 104, null) },
+    ],
+  },
+};
+
+test("recap: upcoming projections take priority over recap when next week has games", () => {
+  const d = recapWithUpcoming;
+  assert.equal(weekMode(d).mode, "recap");
+  const feat = featuredMatchup(d);
+  assert.ok(feat, "expected a featured matchup from upcoming projections");
+  assert.equal(feat.mid, 20, "upcoming game mid 20 wins over recap");
+  assert.equal(feat.edge, 1);
+  assert.ok(feat.why.includes("projected"));
+});
 
 test("preview: picks the closest projected finish", () => {
   const d = previewBase;
