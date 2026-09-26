@@ -142,7 +142,7 @@ test("slate desk final phase: last week's queue survives rollover, scores only",
   d.last_week.games[0].b.pts = 39;
   const final = slateFinalArticles(d);
   const ids = final.map((a) => a.id);
-  assert.deepEqual(ids, ["w2-slate", "w2-decider"]);
+  assert.deepEqual(ids, ["w2-slate", "w2-edge", "w2-bench", "w2-decider"]);
   const decider = final.find((a) => a.id === "w2-decider");
   assert.ok(decider.headline.includes("Gamma") && decider.headline.includes("beats"));
   assert.ok(decider.body.includes("final league scores") || decider.body.includes("completed box score"));

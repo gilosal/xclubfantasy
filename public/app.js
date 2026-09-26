@@ -1,4 +1,5 @@
-/* XClub client: small, dependency-free, mobile-first. All source strings are escaped. */
+import { initialRoute, matchupPhase, projectionCoverage, projectionPair, resolveGameLink, thursdayGame } from "./view-models.js?v=20260926-fixes2";
+
 const $ = (id) => document.getElementById(id);
 const esc = (s) =>
   String(s ?? "").replace(
@@ -25,7 +26,7 @@ const date = (ms) =>
   }).format(new Date(ms));
 let DATA,
   currentView = "home",
-  matchMode = "recap",
+  matchMode = "last",
   playerLimit = 40,
   loading = false,
   returnHash = "#home",
@@ -96,36 +97,31 @@ function storyCard(a) {
 }
 function tnfCard(d) {
   const nw = d.next_week || {};
-  const games = nw.games || [];
-  const tnfGame = games.find((g) => String(g.mid) === "1");
+  const tnfGame = thursdayGame(nw);
   if (!tnfGame) return "";
   const a = tnfGame.a || {}, b = tnfGame.b || {};
-  const fav = (a.proj_total ?? Infinity) <= (b.proj_total ?? Infinity) ? a : b;
-  const gap = Math.abs((a.proj_total || 0) - (b.proj_total || 0));
-  const favText = fav.proj_total != null
-    ? `${esc(fav.team)} +${f(gap)}`
-    : "open";
-  const projCovered = tnfGame.a.proj_covered ?? 0;
-  const projSlots = tnfGame.a.proj_slots ?? 0;
+  const projection = projectionPair(a, b);
+  const favorite = projection.favorite === "a" ? a : projection.favorite === "b" ? b : null;
+  const favoredBy = favorite && projection.gap != null ? `${favorite.team} +${f(projection.gap)}` : null;
+  const aCoverage = projectionCoverage(a);
+  const bCoverage = projectionCoverage(b);
+  const side = (team, total, sideKey) => `<div class="tnf-side ${projection.favorite === sideKey ? "tnf-fav" : ""}">
+        <div class="tnf-pts">${total == null ? "—" : f(total)}</div>
+        <a class="tnf-team" href="#team/${team.rid}">${esc(team.team)}</a>
+        <div class="tnf-meta">${projection.favorite === sideKey && projection.gap != null ? `Favored by ${f(projection.gap)}` : ""}</div>
+      </div>`;
+  const projectionLabel = projection.favorite
+    ? `${favoredBy} · estimates: ${a.team} ${aCoverage}, ${b.team} ${bCoverage}`
+    : projection.gap === 0 ? "Even projections" : "Projection comparison unavailable";
   return `<section class="tnf-feature" aria-label="Thursday Night Football">
     <div class="tnf-badge">🏈 TNF</div>
     <h3 class="tnf-headline">Thursday Night Football — Week ${nw.week}</h3>
     <div class="tnf-matchup">
-      <div class="tnf-side ${fav.rid === a.rid ? "tnf-fav" : ""}">
-        <div class="tnf-pts">${fav.proj_total != null ? f(fav.proj_total) : "—"}</div>
-        <a class="tnf-team" href="#team/${a.rid}">${esc(a.team)}</a>
-        <div class="tnf-meta">${fav.proj_total != null ? "+ " + f(gap) : ""}</div>
-      </div>
+      ${side(a, projection.aTotal, "a")}
       <div class="tnf-vs">vs</div>
-      <div class="tnf-side">
-        <div class="tnf-pts">${fav.proj_total != null ? f(fav.proj_total - gap) : "—"}</div>
-        <a class="tnf-team" href="#team/${b.rid}">${esc(b.team)}</a>
-      </div>
+      ${side(b, projection.bTotal, "b")}
     </div>
-    <p class="tnf-copy">
-      ${esc(a.team)} vs. ${esc(b.team)}
-      ${fav.proj_total != null ? ` · ${esc(fav.team)} +${f(gap)} (${projCovered}/${projSlots} estimates)` : " · Projections pending"}
-    </p>
+    <p class="tnf-copy">${esc(a.team)} vs. ${esc(b.team)} · ${esc(projectionLabel)}</p>
     <div class="tnf-foot"><a class="text-link" href="#game/${nw.week}/${tnfGame.mid}">Full matchup →</a></div>
   </section>`;
 }
@@ -174,9 +170,11 @@ function renderHome(d) {
   const opp = next ? (String(next.a.rid) === followed ? next.b : next.a) : null;
   const top = d.last_week?.team_of_the_week;
   const banterLead = !!(lead && lead.satire);
-  const leadEyebrow = banterLead
-    ? `${lead.tag} · Week ${wm.nextWeek ?? "—"} preview`
-    : `${lead.tag} · ${weekLabel}${wm.mode === "live" ? " · In progress" : ""}`;
+  const leadEyebrow = !lead
+    ? ""
+    : banterLead
+      ? `${lead.tag} · Week ${wm.nextWeek ?? "—"} preview`
+      : `${lead.tag} · ${weekLabel}${wm.mode === "live" ? " · In progress" : ""}`;
   const leadCta = banterLead
     ? "Read the column"
     : wm.mode === "preview"
@@ -233,17 +231,28 @@ function renderHome(d) {
 function lineup(s, preview) {
   return `<div><div class="lineup-title">${esc(s.team)}</div>${s.starters.map((p) => `<div class="lineup-row"><span class="slot">${esc(p.slot || p.pos)}</span><div><strong>${esc(p.name)}</strong>${injury(p)}<div class="small">${esc(p.team)}${p.pos ? ` · ${esc(p.pos)}` : ""}</div></div><span class="num">${f(preview ? p.proj : p.pts)}</span></div>`).join("")}${!preview && s.bench.length ? `<div class="lineup-title">Bench</div>${s.bench.map((p) => `<div class="lineup-row"><span class="slot">${esc(p.pos)}</span><strong>${esc(p.name)}</strong><span class="num">${f(p.pts)}</span></div>`).join("")}` : ""}</div>`;
 }
-function gameCard(g, week, preview) {
+function gameCard(g, week, phase) {
+  const preview = phase === "preview";
+  const inProgress = phase === "live";
   const tie = g.a.pts === g.b.pts;
-  const status = preview ? DATA.next_week.status : "complete";
-  const label = preview
-    ? status === "upcoming"
-      ? "Upcoming · Projected"
-      : status === "complete"
-        ? "Final · Actual / projected"
-        : "In progress · Actual / projected"
-    : "Final";
-  return `<article class="game" data-mid="${g.mid}"><div class="game-top"><span>Week ${week} · ${label}</span>${!preview ? `<button class="share-game" data-share-game="${week}/${g.mid}" aria-label="Copy a link to this matchup">Share</button><span class="close-label">${tie ? "Tie" : g.margin < 5 ? "Close finish" : ""}</span>` : ""}</div><div class="game-sides">${[g.a, g.b].map((s) => `<a class="game-side ${!preview && s.pts > (s === g.a ? g.b : g.a).pts ? "winner" : ""}" href="#team/${s.rid}">${avatar(s.avatar, s.team)}<div><div class="team-name">${esc(s.team)}</div><div class="small">${preview ? (s.proj_total == null ? `${s.proj_covered}/${s.proj_slots} estimates available` : "Sleeper standard estimate") : `Top: ${esc([...s.starters].filter((p) => p.pts != null).sort((a, b) => b.pts - a.pts)[0]?.name || "—")}`}</div></div><div class="score">${f(preview && status === "upcoming" ? s.proj_total : s.pts)}${preview && status !== "upcoming" ? `<div class="small">Proj. ${f(s.proj_total)}</div>` : ""}</div></a>`).join("")}</div>${!preview ? matchupStory(g, DATA, false) : ""}<p class="game-foot">${preview ? "Estimates, not a win probability." : tie ? "An even result." : `${f(g.margin)}-point margin · ${f(g.total)} combined`}</p><details class="lineup-details"><summary>${preview ? "Starting lineups & projections" : "Full box score & bench"}</summary><div class="lineup-columns">${lineup(g.a, preview)}${lineup(g.b, preview)}</div></details></article>`;
+  const label = preview ? "Upcoming · Projected" : inProgress ? "In progress · Actual / projected" : "Final";
+  const closeLabel = tie ? (inProgress ? "Level" : "Tie") : g.margin < 5 ? inProgress ? "Close live game" : "Close finish" : "";
+  const sides = [g.a, g.b].map((s) => {
+    const opponent = s === g.a ? g.b : g.a;
+    const meta = preview
+      ? s.proj_total == null ? `${s.proj_covered}/${s.proj_slots} estimates available` : "Sleeper standard estimate"
+      : `Top: ${esc([...s.starters].filter((p) => p.pts != null).sort((a, b) => b.pts - a.pts)[0]?.name || "—")}`;
+    const projected = inProgress ? `<div class="small">Proj. ${f(s.proj_total)}</div>` : "";
+    return `<a class="game-side ${!preview && s.pts > opponent.pts ? "winner" : ""}" href="#team/${s.rid}">${avatar(s.avatar, s.team)}<div><div class="team-name">${esc(s.team)}</div><div class="small">${meta}</div></div><div class="score">${f(preview ? s.proj_total : s.pts)}${projected}</div></a>`;
+  }).join("");
+  const story = preview ? "" : matchupStory(g, DATA, false);
+  const foot = preview
+    ? "Estimates, not a win probability."
+    : inProgress
+      ? `Live score · ${f(g.total)} points scored so far.`
+      : tie ? "An even final result." : `${f(g.margin)}-point margin · ${f(g.total)} combined`;
+  const detailLabel = preview ? "Starting lineups & projections" : inProgress ? "Current box score & bench" : "Full box score & bench";
+  return `<article class="game" data-mid="${g.mid}"><div class="game-top"><span>Week ${week} · ${label}</span>${!preview ? `<button class="share-game" data-share-game="${week}/${g.mid}" aria-label="Copy a link to this matchup">Share</button><span class="close-label">${closeLabel}</span>` : ""}</div><div class="game-sides">${sides}</div>${story}<p class="game-foot">${foot}</p><details class="lineup-details"><summary>${detailLabel}</summary><div class="lineup-columns">${lineup(g.a, preview)}${lineup(g.b, preview)}</div></details></article>`;
 }
 function narrativeCard(c, d) {
   const shareUrl = `${location.origin}${location.pathname}#game/${c.week}/${c.mid}`;
@@ -302,13 +311,14 @@ function renderWeekend(d) {
     <p class="context-note">Pre-game lines use Sleeper's standard projections — an edge is a points gap, not a win probability. Recaps are built from the final box score, including hindsight bench swings. Injury chips are status flags — verify before kickoff.</p>`;
 }
 function featuredCard(c, d, titleId = "featTitle") {
-  const wm = d.week_mode || {};
-  const isRecap = wm.mode === "recap";
+  const phase = c.live ? "live" : c.mode === "recap" ? "final" : "preview";
+  const isRecap = phase === "final";
+  const hasScore = phase === "final" || phase === "live";
   const sideLine = (s) => {
     const st = d.standings.find((x) => String(x.rid) === String(s.rid)) || {};
     const rec = `${st.wins ?? "?"}-${st.losses ?? "?"}${st.ties ? `-${st.ties}` : ""}`;
     const isA = String(c.a.rid) === String(s.rid);
-    const val = isRecap ? (isA ? c.scoreA : c.scoreB) : s.proj;
+    const val = hasScore ? (isA ? c.scoreA : c.scoreB) : s.proj;
     return `<div class="feat-side ${c.winner && String(c.winner.rid) === String(s.rid) ? "winner" : ""}">
       <div class="feat-score num">${f(val)}</div>
       <a class="feat-team" href="#team/${s.rid}">${esc(s.team)}</a>
@@ -330,13 +340,13 @@ function featuredCard(c, d, titleId = "featTitle") {
     ? `<div class="feat-fact"><span>Closest positional battle</span><strong>${esc(c.battle.slot)} · ${f(c.battle.a)} to ${f(c.battle.b)}</strong></div>`
     : "";
   const topLine = c.top ? `<div class="feat-fact"><span>Top scorer</span><strong>${esc(c.top.name)} · ${f(c.top.pts)} pts</strong></div>` : "";
-  const decidedBy = c.decidedBy?.text ? `<div class="feat-fact decided"><span>The deciding move</span><strong>${esc(c.decidedBy.text)}</strong></div>` : "";
+  const decidedBy = c.decidedBy?.text ? `<div class="feat-fact decided"><span>Hindsight only</span><strong>${esc(c.decidedBy.text)}</strong></div>` : "";
   const leaves = c.leaves
     ? `<div class="feat-leaves small">Where it leaves them: ${esc(c.leaves.a.rec)} at #${c.leaves.a.rank ?? "—"} · ${esc(c.leaves.b.rec)} at #${c.leaves.b.rank ?? "—"}</div>`
     : "";
   return `<section class="feat" aria-labelledby="${esc(titleId)}">${head("Matchup of the week", c.week ? `Week ${c.week}` : "")}
     <article class="feat-card">
-      <div class="feat-scores">${sideLine(c.a)}<div class="feat-vs" aria-hidden="true">${isRecap ? "final" : "vs"}</div>${sideLine(c.b)}</div>
+      <div class="feat-scores">${sideLine(c.a)}<div class="feat-vs" aria-hidden="true">${phase === "final" ? "final" : phase}</div>${sideLine(c.b)}</div>
       <h3 id="${esc(titleId)}">${esc(headline)}</h3>
       <p class="feat-dek">${esc(dek)}</p>
       ${topLine}${battle}${decidedBy}${leaves}
@@ -344,17 +354,20 @@ function featuredCard(c, d, titleId = "featTitle") {
     </article></section>`;
 }
 function renderMatchups(d) {
-  if (!d.last_week) matchMode = "preview";
-  const preview = matchMode === "preview",
-    week = preview ? d.next_week.week : d.last_week?.week,
-    games = preview ? d.next_week.games : d.last_week?.games || [];
+  const useNext = matchMode === "next" || !d.last_week;
+  const source = useNext ? d.next_week : d.last_week;
+  const phase = useNext ? matchupPhase(d.next_week.status) : "final";
+  const actualPhase = phase === "unknown" ? "preview" : phase;
+  const week = source?.week;
+  const games = source?.games || [];
   const sorted = [...games].sort(
     (a, b) =>
       Number([b.a.rid, b.b.rid].map(String).includes(followed)) -
       Number([a.a.rid, a.b.rid].map(String).includes(followed)),
   );
+  const weekLabel = actualPhase === "preview" ? "Preview" : actualPhase === "live" ? "In progress" : "Results";
   $("view-matchups").innerHTML =
-    `${intro("The scoreboard", "Scores & matchups.", "Results and starting lineups. Choose your team to bring its matchup to the top.")}<div class="match-follow"><label for="matchFollow">Your team</label><select id="matchFollow"><option value="">All matchups</option>${d.standings.map((t) => `<option value="${t.rid}" ${followed === String(t.rid) ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select></div><div class="tab-switch" aria-label="Select matchup week">${d.last_week ? `<button data-match-mode="recap" aria-pressed="${!preview}">Week ${d.last_week.week} · Results</button>` : ""}<button data-match-mode="preview" aria-pressed="${preview}">Week ${d.next_week.week} · ${d.next_week.status === "upcoming" ? "Preview" : d.next_week.status === "complete" ? "Results" : "In progress"}</button></div>${preview ? `<p class="context-note">${esc(d.methodology.projections)} Lineups fetched ${esc(date(d.asof))} ET; they may change before kickoff.</p>` : ""}<div class="games-grid">${sorted.map((g) => gameCard(g, week, preview)).join("") || '<div class="empty">No head-to-head matchups are scheduled for this week.</div>'}</div>`;
+    `${intro("The scoreboard", "Scores & matchups.", "Results and starting lineups. Choose your team to bring its matchup to the top.")}<div class="match-follow"><label for="matchFollow">Your team</label><select id="matchFollow"><option value="">All matchups</option>${d.standings.map((t) => `<option value="${t.rid}" ${followed === String(t.rid) ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select></div><div class="tab-switch" aria-label="Select matchup week">${d.last_week ? `<button data-match-mode="last" aria-pressed="${!useNext}">Week ${d.last_week.week} · Results</button>` : ""}<button data-match-mode="next" aria-pressed="${useNext}">Week ${d.next_week.week} · ${weekLabel}</button></div>${actualPhase === "preview" ? `<p class="context-note">${esc(d.methodology.projections)} Lineups fetched ${esc(date(d.asof))} ET; they may change before kickoff.</p>` : ""}<div class="games-grid">${sorted.map((g) => gameCard(g, week, actualPhase)).join("") || '<div class="empty">No head-to-head matchups are scheduled for this week.</div>'}</div>`;
 }
 function renderStandings(d) {
   $("view-standings").innerHTML =
@@ -617,7 +630,13 @@ function showArticle(id) {
     ...(DATA.slate_final || []),
   ].find((x) => x.id === id);
   if (!a) {
-    location.hash = "home";
+    $("articleContent").innerHTML = `<span class="eyebrow">XClub archive</span><h1 id="articleTitle">Story unavailable</h1><p class="article-dek">This story is not included in the current archive. No replacement story or scores have been substituted.</p><div class="article-actions"><a href="#home">Back to Home</a></div>`;
+    document.title = "Story unavailable | XClub Fantasy";
+    if (!$("articleDialog").open) {
+      $("articleDialog").showModal();
+      document.body.classList.add("modal-open");
+    }
+    $("articleDialog").scrollTop = 0;
     return;
   }
   const satireNote = a.satire
@@ -642,7 +661,7 @@ function showArticle(id) {
 }
 function route(scroll = true) {
   if (!DATA) return;
-  const hash = location.hash.slice(1) || "home";
+  const hash = initialRoute(location.hash, location.pathname);
   if (hash.startsWith("story/")) {
     showArticle(hash.slice(6));
     return;
@@ -664,27 +683,28 @@ function route(scroll = true) {
     return;
   }
   if (hash.startsWith("game/")) {
-    // Week-qualified form (#game/WEEK/MID) is authoritative — Sleeper reuses
-    // matchup IDs across weeks, so a bare mid is ambiguous. Bare #game/MID
-    // falls back to the completed game (recap) when it exists, else preview.
     const parts = hash.slice(5).split("/").filter(Boolean);
     const mid = Number(parts[parts.length - 1]);
     const week = parts.length > 1 ? Number(parts[0]) : null;
-    const lastGames = DATA.last_week?.games || [];
-    const nextGames = DATA.next_week?.games || [];
-    const inLast = lastGames.find((g) => g.mid === mid);
-    const inNext = nextGames.find((g) => g.mid === mid);
-    // Which week's instance did the caller ask for? Explicit week wins; bare
-    // mid prefers the completed game, then the upcoming one.
-    const wantPreview =
-      week != null ? week === (DATA.next_week?.week ?? -1) : !inLast && !!inNext && DATA.next_week?.status === "upcoming";
-    const game = wantPreview ? inNext || inLast : inLast || inNext;
-    if (!game) {
-      location.hash = "matchups";
+    const resolved = resolveGameLink(DATA.last_week, DATA.next_week, week, mid);
+    if (!resolved) {
+      const requested = week == null
+        ? `Matchup ${Number.isFinite(mid) ? mid : "?"}`
+        : `Week ${Number.isFinite(week) ? week : "?"}, matchup ${Number.isFinite(mid) ? mid : "?"}`;
+      currentView = "matchups";
+      $("view-matchups").innerHTML = `${intro("The scoreboard", "Matchup not available", "This feed only carries the latest completed slate and the current slate.")}<div class="empty" role="status">${esc(requested)} is not present in the current feed. No other week's score has been substituted.</div><p><a class="text-link" href="#matchups">View available matchups →</a></p>`;
+      for (const v of ["home", "weekend", "matchups", "standings", "teams", "players", "injuries", "waivers", "history"]) $(`view-${v}`).hidden = v !== "matchups";
+      document.querySelectorAll("[data-nav]").forEach((a) => {
+        if (a.dataset.nav === "matchups") a.setAttribute("aria-current", "page");
+        else a.removeAttribute("aria-current");
+      });
+      document.title = "Matchup unavailable | XClub Fantasy";
+      if (scroll) window.scrollTo({ top: 0, behavior: "instant" });
       return;
     }
     currentView = "matchups";
-    matchMode = wantPreview ? "preview" : "recap";
+    matchMode = resolved.source;
+    const game = resolved.game;
     renderMatchups(DATA);
     for (const v of ["home", "weekend", "matchups", "standings", "teams", "players", "injuries", "waivers", "history"]) $(`view-${v}`).hidden = v !== "matchups";
     document.querySelectorAll("[data-nav]").forEach((a) => {

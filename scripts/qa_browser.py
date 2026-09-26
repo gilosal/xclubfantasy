@@ -29,6 +29,13 @@ async def main():
                 assert not checks['home_overflow']['overflow'],checks
                 await page.screenshot(path=str(OUT/f'home-{width}.png'),full_page=True)
                 if width==390: await page.screenshot(path=str(OUT/'phone-first-screen.png'))
+                if width==390:
+                    tnf=page.locator('.tnf-feature')
+                    await expect(tnf).to_be_visible()
+                    assert await tnf.count()==1
+                    tnf_state=await tnf.evaluate("""el=>{const sides=[...el.querySelectorAll('.tnf-side')];const values=sides.map(s=>{const n=Number((s.querySelector('.tnf-pts')?.textContent||'').replace(/,/g,''));return Number.isFinite(n)?n:null});const favorite=sides.findIndex(s=>s.classList.contains('tnf-fav'));const expected=values.length!==2||values.some(v=>v===null)||values[0]===values[1]?-1:values[0]>values[1]?0:1;return{values,favorite,expected}}""")
+                    assert tnf_state['favorite']==tnf_state['expected'],tnf_state
+                    checks['tnf_projection_favorite']=tnf_state
                 for nav in ['matchups','standings','players','history']:
                     await page.locator(f'[data-nav="{nav}"]').click()
                     await expect(page.locator(f'#view-{nav}')).to_be_visible()
@@ -52,7 +59,7 @@ async def main():
                     await page.locator('.lineup-details summary').first.click()
                     await expect(page.locator('.lineup-columns').first).to_be_visible()
                     assert 'Bench' in await page.locator('.lineup-columns').first.inner_text()
-                    await page.locator('[data-match-mode="preview"]').click()
+                    await page.locator('[data-match-mode="next"]').click()
                     assert await page.locator('.game').count()==6
                     await page.locator('.lineup-details summary').first.click()
                     assert not (await overflow(page))['overflow']

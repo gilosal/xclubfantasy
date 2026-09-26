@@ -1221,7 +1221,10 @@ h3 {
 }
 .feat-leaves {
   margin-top: 10px;
-  opacity: 0.85;
+}
+.feat-card .feat-leaves {
+  color: inherit;
+  opacity: 1;
 }
 .feat-open {
   margin-top: 12px;

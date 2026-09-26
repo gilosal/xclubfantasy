@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "xclubfantasy-staging",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "kv_namespaces": [
+    {
+      "binding": "XCF_KV",
+      "id": "542e810273924637b93544b3b3485a57"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

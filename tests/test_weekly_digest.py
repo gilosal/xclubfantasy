@@ -8,6 +8,7 @@ import json
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 # Make scripts/ importable.
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -293,6 +294,17 @@ class MainFlowTests(unittest.TestCase):
         code2, out2 = self._run_main([])
         self.assertEqual(code2, 0)
         self.assertEqual(out2.strip(), "")
+
+    def test_failed_digest_output_is_not_marked_delivered(self):
+        self._patch_fetch(fixture_finalized())
+        sys.argv = ["weekly_digest.py"]
+        with patch("builtins.print", side_effect=[OSError("output not delivered"), None]):
+            code = wd.main()
+        self.assertEqual(code, 1)
+        if os.path.exists(self._state_file):
+            with open(self._state_file, encoding="utf-8") as f:
+                state = json.load(f)
+            self.assertNotIn(3, state.get("delivered", {}).get("2026", []))
 
     def test_auto_silent_when_not_finalized(self):
         # Truly-not-finalized: the completed_week counter hasn't caught up to

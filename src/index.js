@@ -25,10 +25,12 @@ import {
   slateArticles,
   slateFinalArticles,
 } from "./domain.js";
+import { rewrittenHtmlHeaders } from "./http-headers.js";
+import { forceRefreshDue, schedulePayloadRefresh } from "./refresh-policy.js";
 
 const LID = "1371971946459201536";
 const API = "https://api.sleeper.app/v1";
-const BUILD = "2026-09-18.1";
+const BUILD = "2026-09-26-fixes2";
 const ORIGIN = "https://xclubfantasy.robsplex.com";
 const escAttr = (s) =>
   String(s ?? "").replace(
@@ -579,7 +581,7 @@ async function homeHtml(env, url) {
       const res = await env.ASSETS.fetch(new Request(`${url.origin}${p}`));
       if (res.ok) {
         const t = await res.text();
-        if (t && t.length && t.includes("</html>")) return t;
+        if (t && t.length && t.includes("</html>")) return { html: t, headers: res.headers };
       }
     } catch (e) {
       console.error(`ASSETS fetch(${p}) failed:`, String(e));
@@ -599,7 +601,7 @@ async function getPayload(env, ctx, { forceRequested = false } = {}) {
   const ttl = live ? LIVE_TTL_MS : DAY_TTL_MS;
   const minSinceBuild = live ? LIVE_FORCE_MIN_MS : DAY_FORCE_MIN_MS;
   const lastBuild = Number(hit?.asof || 0);
-  const force = forceRequested && Date.now() - lastBuild > minSinceBuild;
+  const force = forceRefreshDue(forceRequested, lastBuild, Date.now(), minSinceBuild);
   if (hit && !force && Date.now() - hit.asof < ttl) return hit;
   try {
     if (!building)
@@ -687,13 +689,13 @@ export default {
 
     if (url.pathname === "/" || url.pathname === "/weekend") {
       try {
-        const [payload, html] = await Promise.all([
+        const [payload, page] = await Promise.all([
           getPayload(env, ctx),
           homeHtml(env, url),
         ]);
-        if (html) {
+        if (page) {
           const meta = ogMeta(url.pathname, payload);
-          const injected = html
+          const injected = page.html
             .replace(
               /<meta property="og:title" content="[^"]*" \/>/,
               `<meta property="og:title" content="${escAttr(meta.title)}" />`,
@@ -712,12 +714,7 @@ export default {
             );
           return new Response(injected, {
             status: 200,
-            headers: {
-              "content-type": "text/html; charset=utf-8",
-              "cache-control": "public, max-age=60, stale-while-revalidate=600",
-              "x-content-type-options": "nosniff",
-              "x-xclub-build": BUILD,
-            },
+            headers: rewrittenHtmlHeaders(page.headers, BUILD),
           });
         }
       } catch (e) {
@@ -727,6 +724,6 @@ export default {
     return env.ASSETS.fetch(req);
   },
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(getPayload(env, ctx, { force: true }));
+    schedulePayloadRefresh(env, ctx, getPayload);
   },
 };

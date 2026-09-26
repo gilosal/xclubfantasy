@@ -7,19 +7,7 @@
       content="width=device-width,initial-scale=1,viewport-fit=cover"
     />
     <meta name="theme-color" content="#161a20" />
-    <script>
-      // Apply the saved theme before first paint (no flash of wrong theme).
-      (function () {
-        try {
-          var t = localStorage.getItem("xcf-theme");
-          if (t !== "light" && t !== "dark")
-            t = matchMedia("(prefers-color-scheme: dark)").matches
-              ? "dark"
-              : "light";
-          document.documentElement.dataset.theme = t;
-        } catch (e) {}
-      })();
-    </script>
+    <script src="/theme-bootstrap.js?v=20260926-fixes2"></script>
     <title>XClub Fantasy | Tom Byrne Memorial League</title>
     <meta
       name="description"
@@ -42,8 +30,8 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=20260920-3" />
-    <script src="/app.js?v=20260920-3" defer></script>
+    <link rel="stylesheet" href="/styles.css?v=20260926-fixes2" />
+    <script type="module" src="/app.js?v=20260926-fixes2"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>

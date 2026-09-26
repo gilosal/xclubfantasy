@@ -169,8 +169,8 @@ export function weeklyAwards(d) {
       const wt = d.standings.find((t) => t.rid === win.rid), lt = d.standings.find((t) => t.rid === lose.rid);
       return wt && lt ? { win, lose, rate: (wt.wins + wt.ties * 0.5) / Math.max(1, wt.wins + wt.losses + wt.ties), wrate: (lt.wins + lt.ties * 0.5) / Math.max(1, lt.wins + lt.losses + lt.ties) } : null;
     })
-    .filter((x) => x && x.rate < x.lose.rate)
-    .sort((a, b) => a.rate - a.lose.rate - (b.rate - b.lose.rate))[0];
+    .filter((x) => x && x.rate < x.wrate)
+    .sort((a, b) => (a.rate - a.wrate) - (b.rate - b.wrate))[0];
   if (upsets) push("biggest-upset", upsets.win.rid, "Biggest upset", `Beat ${upsets.lose.team} from a worse record`, null, d.last_week.week);
   const crimes = sides
     .map((s) => ({ s, swap: bestBenchSwap(s) }))
@@ -366,7 +366,10 @@ export function matchupCard(game, d, week, mode = "auto") {
   const hasScore = Number(a.pts) > 0 || Number(b.pts) > 0 || Number(game.total) > 0;
   const resolved = mode === "auto" ? (hasScore ? "recap" : "preview") : mode;
   const live =
-    resolved === "recap" && hasScore && d.next_week?.status === "in_progress";
+    resolved === "recap" &&
+    hasScore &&
+    week === d.next_week?.week &&
+    d.next_week?.status === "in_progress";
 
   const rec = (s) =>
     s ? `${s.wins}-${s.losses}${s.ties ? `-${s.ties}` : ""}` : "?-?";
@@ -480,7 +483,7 @@ export function matchupCard(game, d, week, mode = "auto") {
         `The closest positional battle came at ${story.battle.slot} (${fmt(story.battle.a.pts)} to ${fmt(story.battle.b.pts)}).`,
       );
     if (story?.decidedBy?.text)
-      narrative.push(`The deciding move: ${story.decidedBy.text}.`);
+      narrative.push(story.decidedBy.text);
     narrative.push(
       `Now ${ai.team} sits at ${ai.rec} and ${bi.team} at ${bi.rec}.`,
     );
@@ -655,12 +658,15 @@ function slateDesk(nw, d, phaseOverride) {
       .sort((a, b) => a.mid - b.mid)
       .map((g) => {
         if (phase === "final") {
-          const winner = g.a.pts >= g.b.pts ? g.a : g.b;
+          const tied = Number(g.a.pts) === Number(g.b.pts);
+          const winner = tied ? null : g.a.pts > g.b.pts ? g.a : g.b;
           const top = [...(g.a.starters || []), ...(g.b.starters || [])]
             .filter((p) => p.pts != null)
             .sort((x, y) => y.pts - x.pts)[0];
           const topTxt = top ? `${top.name} with ${fmt(top.pts)} for ${top.team}` : "no individual lines recorded";
-          return `${g.a.team} vs. ${g.b.team}: final ${fmt(g.a.pts)}–${fmt(g.b.pts)} (${winner.team} won by ${fmt(Math.abs(g.a.pts - g.b.pts))}); top line ${topTxt}.`;
+          return tied
+            ? `${g.a.team} and ${g.b.team} tied ${fmt(g.a.pts)}–${fmt(g.b.pts)}; top line ${topTxt}.`
+            : `${g.a.team} vs. ${g.b.team}: final ${fmt(g.a.pts)}–${fmt(g.b.pts)} (${winner.team} won by ${fmt(Math.abs(g.a.pts - g.b.pts))}); top line ${topTxt}.`;
         }
         const pa = g.a.proj_total,
           pb = g.b.proj_total;
@@ -703,6 +709,30 @@ function slateDesk(nw, d, phaseOverride) {
     });
   }
 
+  // ---- Edge watch: preserve the published ID with final-score facts --------
+  if (phase === "final" && games.length) {
+    const closest = [...games].sort(
+      (a, b) => Math.abs(Number(a.a.pts) - Number(a.b.pts)) - Math.abs(Number(b.a.pts) - Number(b.b.pts)) || a.mid - b.mid,
+    )[0];
+    const margin = round(Math.abs(Number(closest.a.pts) - Number(closest.b.pts)));
+    const tied = Number(closest.a.pts) === Number(closest.b.pts);
+    articles.push({
+      id: `w${week}-edge`,
+      tag: "Slate desk · Final",
+      headline: tied
+        ? `${closest.a.team} and ${closest.b.team}: the slate's closest finish ended level`
+        : `${closest.a.team} vs. ${closest.b.team}: the slate's closest final finish`,
+      dek: tied
+        ? `The two teams finished level at ${fmt(closest.a.pts)}–${fmt(closest.b.pts)}.`
+        : `${fmt(margin)} points separated ${fmt(closest.a.pts)} for ${closest.a.team} and ${fmt(closest.b.pts)} for ${closest.b.team}.`,
+      body: tied
+        ? `${closest.a.team} and ${closest.b.team} tied ${fmt(closest.a.pts)}–${fmt(closest.b.pts)}, the smallest final margin on the Week ${week} slate.`
+        : `${closest.a.team} finished at ${fmt(closest.a.pts)} and ${closest.b.team} at ${fmt(closest.b.pts)}. The ${fmt(margin)}-point final margin was the closest non-tied finish on the Week ${week} slate. These are final box-score facts, not the pregame projection story.`,
+      ...base,
+      rid: tied ? null : closest.a.pts > closest.b.pts ? closest.a.rid : closest.b.rid,
+    });
+  }
+
   // ---- Edge watch (pregame only) ------------------------------------------
   const projGames =
     phase === "final"
@@ -740,6 +770,40 @@ function slateDesk(nw, d, phaseOverride) {
     });
   }
 
+  // ---- Bench chess: final replacement keeps the Sunday link resolvable -----
+  if (phase === "final" && games.length) {
+    const finalSwaps = games
+      .flatMap((g) => [g.a, g.b].map((side) => ({ side, game: g, swap: bestBenchSwap(side) })))
+      .filter((x) => x.swap)
+      .sort((a, b) => b.swap.gain - a.swap.gain || a.game.mid - b.game.mid);
+    const selected = finalSwaps[0];
+    let body;
+    let headline;
+    let dek;
+    let rid = null;
+    if (selected) {
+      const { side, game, swap } = selected;
+      const opponent = side.rid === game.a.rid ? game.b : game.a;
+      const before = Number(side.pts);
+      const after = round(before + swap.gain);
+      const opposing = Number(opponent.pts);
+      const effect = before === opposing
+        ? after > opposing ? "turned the tie into a lead" : "left the teams level"
+        : before < opposing
+          ? after > opposing ? "flipped the result" : after === opposing ? "tied the final score" : "narrowed the final margin"
+          : "increased the winning margin";
+      headline = `${swap.bench.name}: the slate's largest final bench swing`;
+      dek = `${side.team} left ${fmt(swap.gain)} actual points in a legal one-player bench replacement.`;
+      body = `${swap.bench.name} scored ${fmt(swap.bench.pts)} while ${swap.starter.name} scored ${fmt(swap.starter.pts)} in the ${swap.starter.slot} slot for ${side.team}. Replacing that starter would have moved ${side.team} from ${fmt(before)} to ${fmt(after)} points and ${effect} against ${opponent.team} (${fmt(opposing)}). This is a hindsight comparison from the final box score, not a future lineup recommendation.`;
+      rid = side.rid;
+    } else {
+      headline = `Week ${week}: no positive legal bench swing in the final box`;
+      dek = "No eligible one-player bench replacement outscored its starter in the recorded box scores.";
+      body = `The completed Week ${week} lineups contain no positive legal one-player bench replacement in the available final box-score data. This closes the published bench-watch link without inventing a missed opportunity.`;
+    }
+    articles.push({ id: `w${week}-bench`, tag: "Slate desk · Final", headline, dek, body, ...base, rid });
+  }
+
   // ---- Bench chess (pregame information only) ----------------------------
   const swaps =
     phase === "final"
@@ -775,33 +839,42 @@ function slateDesk(nw, d, phaseOverride) {
 
   // ---- The decider (live and final) ---------------------------------------
   if (live || phase === "final") {
-    const scored = games.filter((g) => Number(g.a.pts) > 0 || Number(g.b.pts) > 0);
+    const scored = phase === "final"
+      ? games
+      : games.filter((g) => Number(g.a.pts) > 0 || Number(g.b.pts) > 0);
     const decider = [...scored]
-      .filter((g) => g.a.pts !== g.b.pts)
       .sort((a, b) => Math.abs(a.a.pts - a.b.pts) - Math.abs(b.a.pts - b.b.pts) || a.mid - b.mid)[0];
     if (decider) {
-      const winner = decider.a.pts > decider.b.pts ? decider.a : decider.b;
-      const loser = winner === decider.a ? decider.b : decider.a;
-      const margin = round(Math.abs(winner.pts - loser.pts));
+      const tied = Number(decider.a.pts) === Number(decider.b.pts);
+      const winner = tied ? null : decider.a.pts > decider.b.pts ? decider.a : decider.b;
+      const loser = winner ? (winner === decider.a ? decider.b : decider.a) : null;
+      const margin = tied ? 0 : round(Math.abs(winner.pts - loser.pts));
       const topAll = [...(decider.a.starters || []), ...(decider.b.starters || [])]
         .filter((p) => p.pts != null)
         .sort((x, y) => y.pts - x.pts)[0];
-      const swap = bestBenchSwap(loser);
+      const swap = loser ? bestBenchSwap(loser) : null;
+      const score = `${fmt(decider.a.pts)}–${fmt(decider.b.pts)}`;
       articles.push({
         id: `w${week}-decider`,
-        tag: "Slate desk",
-        headline: live
-          ? `${winner.team} leads ${loser.team} by ${fmt(margin)} — the slate's closest live finish`
-          : `${winner.team} beats ${loser.team} by ${fmt(margin)} — the slate's closest finish`,
-        dek: live
-          ? `${fmt(winner.pts)}–${fmt(loser.pts)} right now${topAll ? `, with ${topAll.name} the biggest line of the game at ${fmt(topAll.pts)}` : ""}. The smallest live margin of the Week ${week} slate.`
-          : `${fmt(winner.pts)}–${fmt(loser.pts)} final${topAll ? `, with ${topAll.name} the biggest line of the game at ${fmt(topAll.pts)}` : ""}. The smallest margin of the Week ${week} slate.`,
+        tag: phase === "final" ? "Slate desk · Final" : "Slate desk",
+        headline: tied
+          ? `${decider.a.team} and ${decider.b.team} are level — the slate's closest ${live ? "live" : "final"} finish`
+          : live
+            ? `${winner.team} leads ${loser.team} by ${fmt(margin)} — the slate's closest live finish`
+            : `${winner.team} beats ${loser.team} by ${fmt(margin)} — the slate's closest finish`,
+        dek: tied
+          ? `${score}${live ? " right now" : " final"}${topAll ? `; ${topAll.name} led the game with ${fmt(topAll.pts)}` : ""}.`
+          : live
+            ? `${fmt(winner.pts)}–${fmt(loser.pts)} right now${topAll ? `, with ${topAll.name} the biggest line of the game at ${fmt(topAll.pts)}` : ""}. The smallest live margin of the Week ${week} slate.`
+            : `${fmt(winner.pts)}–${fmt(loser.pts)} final${topAll ? `, with ${topAll.name} the biggest line of the game at ${fmt(topAll.pts)}` : ""}. The smallest margin of the Week ${week} slate.`,
         body: [
-          live
-            ? `${winner.team} leads ${loser.team} ${fmt(winner.pts)} to ${fmt(loser.pts)} — a ${fmt(margin)}-point margin, the closest live finish among the ${scored.length} games with scores so far this Sunday.`
-            : `${winner.team} beat ${loser.team} ${fmt(winner.pts)} to ${fmt(loser.pts)} — a ${fmt(margin)}-point margin, the closest finish of the ${scored.length} games in the Week ${week} slate.`,
+          tied
+            ? `${decider.a.team} and ${decider.b.team} are tied ${score} — level at ${live ? "the current checkpoint" : "the final whistle"}, the smallest ${live ? "live" : "final"} margin among the ${scored.length} games on the Week ${week} slate.`
+            : live
+              ? `${winner.team} leads ${loser.team} ${fmt(winner.pts)} to ${fmt(loser.pts)} — a ${fmt(margin)}-point margin, the closest live finish among the ${scored.length} games with scores so far this Sunday.`
+              : `${winner.team} beat ${loser.team} ${fmt(winner.pts)} to ${fmt(loser.pts)} — a ${fmt(margin)}-point margin, the closest finish of the ${scored.length} games in the Week ${week} slate.`,
           topAll
-            ? `${topAll.name} had the biggest individual line of the matchup at ${fmt(topAll.pts)} points${topAll.team === winner.team ? " for the team ahead" : " for the team behind"}.`
+            ? `${topAll.name} had the biggest individual line of the matchup at ${fmt(topAll.pts)} points for ${topAll.team}.`
             : "",
           swap
             ? live
@@ -815,7 +888,7 @@ function slateDesk(nw, d, phaseOverride) {
           .filter(Boolean)
           .join("\n\n"),
         ...base,
-        rid: winner.rid,
+        rid: winner?.rid ?? null,
       });
     }
   }
@@ -981,7 +1054,17 @@ export function gameStory(g, d) {
             // Which single starter decision most plausibly decided it? Hindsight only.
             const loser = winner === a ? b : a;
             const swing = loser.swap;
-            return swing ? { kind: "bench", text: `${swing.bench.name} (${num2(swing.bench.pts)} on the bench) would have flipped it` } : null;
+            const margin = round(Math.abs(Number(winner.pts) - Number(loser.pts)));
+            if (!swing) return null;
+            const outcome = swing.gain > margin
+              ? "flipped the result"
+              : swing.gain === margin
+                ? "tied the final score"
+                : "narrowed the final margin";
+            return {
+              kind: "bench",
+              text: `Hindsight: ${swing.bench.name} (${num2(swing.bench.pts)} on the bench) would have ${outcome}`,
+            };
           })()
         : null,
   };

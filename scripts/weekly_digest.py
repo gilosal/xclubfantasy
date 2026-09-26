@@ -24,7 +24,7 @@ SITE = os.environ.get("XCLUB_SITE", "https://xclubfantasy.robsplex.com")
 API = SITE + "/api/data"
 STATE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "digest_state.json")
 MAX_LEN = 2000  # Discord message limit
-WAIT_MINUTES = 50  # finalization grace: re-check every 5 min, capped under the 60-min cron script timeout
+WAIT_MINUTES = 40  # leave headroom for API retries and rendering under the 60-min cron cap
 
 AWARD_EMOJI = {
     "team-of-the-week": "🏆",
@@ -281,16 +281,17 @@ def main():
                 time.sleep(300)
                 data = fetch_payload()
         week = int((data.get("last_week") or {}).get("week") or 0)
+        state = None
         if not dry:
             state = load_state()
             if week in state.get("delivered", {}).get(data.get("season", "?"), []):
                 return 0  # already delivered this week
-            text = build_digest(data)
+        text = build_digest(data)
+        print(text)
+        sys.stdout.flush()
+        if state is not None:
             state.setdefault("delivered", {}).setdefault(data.get("season", "?"), []).append(week)
             save_state(state)
-        else:
-            text = build_digest(data)
-        print(text)
         return 0
     except Exception as e:
         print(f"XClub weekly digest failed: {e}")
