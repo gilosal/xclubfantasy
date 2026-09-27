@@ -38,6 +38,42 @@ class RefreshPlayersDeployTests(unittest.TestCase):
             )
         )
 
+    def test_missing_checkout_wrangler_installs_from_pinned_release_snapshot(self):
+        module = self.load_script()
+        with tempfile.TemporaryDirectory() as tmp:
+            project = pathlib.Path(tmp) / "project"
+            release = pathlib.Path(tmp) / "release"
+            project.mkdir()
+            release.mkdir()
+            (release / "package.json").write_text("{}", encoding="utf-8")
+            (release / "package-lock.json").write_text("{}", encoding="utf-8")
+            temp_dir = pathlib.Path(tmp) / "logs"
+            calls = []
+
+            def fake_run(command, label, log_path, timeout, cwd=None):
+                calls.append((command, label, timeout, cwd, log_path))
+                target = release / "node_modules" / "wrangler" / "bin" / "wrangler.js"
+                target.parent.mkdir(parents=True)
+                target.write_text("// pinned test Wrangler", encoding="utf-8")
+                return "added locked dependencies"
+
+            with patch.object(module, "PROJECT_ROOT", project), \
+                 patch.object(module, "find_command", return_value="npm"), \
+                 patch.object(module, "run_command", side_effect=fake_run):
+                wrangler = module.resolve_wrangler(release, temp_dir)
+
+            self.assertEqual(
+                wrangler,
+                release / "node_modules" / "wrangler" / "bin" / "wrangler.js",
+            )
+            self.assertEqual(len(calls), 1)
+            command, label, timeout, cwd, log_path = calls[0]
+            self.assertEqual(command, ["npm", "ci", "--include=dev", "--no-audit", "--no-fund"])
+            self.assertEqual(label, "pinned release dependency install")
+            self.assertEqual(cwd, release)
+            self.assertGreaterEqual(timeout, 600)
+            self.assertEqual(log_path, temp_dir / "xcf_release_npm_install.log")
+
 
     def test_release_snapshot_excludes_uncommitted_application_changes(self):
         module = self.load_script()

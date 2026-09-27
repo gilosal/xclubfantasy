@@ -184,6 +184,31 @@ def run_release_gates(release_root: Path, node: str, temp_dir: Path) -> None:
         )
 
 
+def resolve_wrangler(release_root: Path, temp_dir: Path) -> Path:
+    """Use checkout Wrangler when present; otherwise install the pinned lockfile into the snapshot."""
+    checkout_wrangler = PROJECT_ROOT / "node_modules" / "wrangler" / "bin" / "wrangler.js"
+    if checkout_wrangler.is_file():
+        return checkout_wrangler
+
+    release_wrangler = release_root / "node_modules" / "wrangler" / "bin" / "wrangler.js"
+    if release_wrangler.is_file():
+        return release_wrangler
+    if not (release_root / "package.json").is_file() or not (release_root / "package-lock.json").is_file():
+        raise RuntimeError("approved release snapshot is missing its pinned npm manifests")
+
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    run_command(
+        [find_command("npm"), "ci", "--include=dev", "--no-audit", "--no-fund"],
+        "pinned release dependency install",
+        temp_dir / "xcf_release_npm_install.log",
+        900,
+        cwd=release_root,
+    )
+    if not release_wrangler.is_file():
+        raise RuntimeError("pinned Wrangler entrypoint is missing after release dependency installation")
+    return release_wrangler
+
+
 
 def main() -> int:
     temp_dir = Path(tempfile.gettempdir())
@@ -229,13 +254,12 @@ def main() -> int:
                     verify_log.write_text(str(exc), encoding="utf-8")
 
         # Build players validates against the exact Sleeper snapshot used here.
-        # Pin Wrangler to this checkout's locked package while running it against
-        # the isolated, committed release directory.
+        # Use the locked Wrangler package while deploying only the isolated,
+        # committed release snapshot. If the developer checkout's installation
+        # is incomplete, resolve Wrangler from this snapshot's lockfile instead.
         node = find_command("node")
         run_release_gates(release_root, node, temp_dir)
-        wrangler = PROJECT_ROOT / "node_modules" / "wrangler" / "bin" / "wrangler.js"
-        if not wrangler.is_file():
-            raise RuntimeError(f"locked Wrangler entrypoint is missing: {wrangler}")
+        wrangler = resolve_wrangler(release_root, temp_dir)
         run_command(
             [node, str(wrangler), "deploy", "--dry-run", "--strict", "--config", str(release_root / "wrangler.jsonc")],
             "Wrangler dry run",
