@@ -25,12 +25,12 @@ import {
   slateArticles,
   slateFinalArticles,
 } from "./domain.js";
-import { rewrittenHtmlHeaders } from "./http-headers.js";
+import { isHtmlDocumentRequest, rewrittenHtmlHeaders } from "./http-headers.js";
 import { forceRefreshDue, schedulePayloadRefresh } from "./refresh-policy.js";
 
 const LID = "1371971946459201536";
 const API = "https://api.sleeper.app/v1";
-const BUILD = "2026-09-26-fixes2";
+const BUILD = "2026-09-28-onion-cover";
 const ORIGIN = "https://xclubfantasy.robsplex.com";
 const escAttr = (s) =>
   String(s ?? "").replace(
@@ -634,6 +634,13 @@ export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
     if (url.pathname === "/api/data") {
+      // A human opening the data URL should land on the application; fetch/XHR
+      // requests (Accept: */* or application/json) still receive the JSON API.
+      if (isHtmlDocumentRequest(req))
+        return new Response(null, {
+          status: 302,
+          headers: { location: `${url.origin}/`, "cache-control": "no-store" },
+        });
       if (!["GET", "HEAD"].includes(req.method))
         return new Response("Method not allowed", {
           status: 405,

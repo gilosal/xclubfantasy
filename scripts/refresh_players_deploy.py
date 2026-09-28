@@ -261,14 +261,14 @@ def main() -> int:
         run_release_gates(release_root, node, temp_dir)
         wrangler = resolve_wrangler(release_root, temp_dir)
         run_command(
-            [node, str(wrangler), "deploy", "--dry-run", "--strict", "--config", str(release_root / "wrangler.jsonc")],
+            [node, str(wrangler), "deploy", "--dry-run", "--strict", "--env", "production", "--config", str(release_root / "wrangler.jsonc")],
             "Wrangler dry run",
             temp_dir / "xcf_wrangler_dry_run.log",
             300,
             cwd=release_root,
         )
         deploy_output = run_command(
-            [node, str(wrangler), "deploy", "--strict", "--config", str(release_root / "wrangler.jsonc")],
+            [node, str(wrangler), "deploy", "--strict", "--env", "production", "--config", str(release_root / "wrangler.jsonc")],
             "Wrangler deploy",
             deploy_log,
             600,

@@ -1,4 +1,4 @@
-import { initialRoute, matchupPhase, projectionCoverage, projectionPair, resolveGameLink, thursdayGame } from "./view-models.js?v=20260926-fixes2";
+import { initialRoute, matchupPhase, projectionCoverage, projectionPair, resolveGameLink, thursdayGame } from "./view-models.js?v=20260928-onion-cover";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) =>
@@ -173,7 +173,7 @@ function renderHome(d) {
   const leadEyebrow = !lead
     ? ""
     : banterLead
-      ? `${lead.tag} · Week ${wm.nextWeek ?? "—"} preview`
+      ? `${lead.tag} · ${lead.period || "Week " + (wm.nextWeek ?? "—") + " preview"}`
       : `${lead.tag} · ${weekLabel}${wm.mode === "live" ? " · In progress" : ""}`;
   const leadCta = banterLead
     ? "Read the column"

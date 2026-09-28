@@ -84,6 +84,31 @@ export function bestProjBenchSwap(side) {
   return best;
 }
 
+/** Identify the short-lived Week 2 cover story from the actual lineup feed. */
+export function danielsCoverContext(d) {
+  if (String(d?.season) !== "2026" || Number(d?.last_week?.week) !== 2) return null;
+  const game = (d.last_week.games || []).find((g) =>
+    [g?.a, g?.b].some((side) =>
+      (side?.team || "").startsWith("Red Zone Supernova") &&
+      (side?.starters || []).some(
+        (p) =>
+          p.name === "Jayden Daniels" &&
+          p.slot === "QB" &&
+          String(p.injury || "").trim().toLowerCase() === "out",
+      ),
+    ),
+  );
+  if (!game) return null;
+  const side = [game.a, game.b].find(
+    (t) =>
+      (t?.team || "").startsWith("Red Zone Supernova") &&
+      (t?.starters || []).some((p) => p.name === "Jayden Daniels" && p.slot === "QB"),
+  );
+  if (!side) return null;
+  const player = side.starters.find((p) => p.name === "Jayden Daniels" && p.slot === "QB");
+  return { game, side, opponent: side === game.a ? game.b : game.a, player };
+}
+
 /** Which mode should the homepage lead with? Data-driven, never invented. */
 export function weekMode(d) {
   const status = d.next_week?.status || "upcoming";
@@ -101,11 +126,13 @@ export function weekMode(d) {
     week: mode === "preview" || live ? d.next_week.week : d.last_week.week,
     nextWeek: d.next_week?.week ?? null,
     status,
-    leadStory: bakerSpiteMatchup(d)
-      ? "baker-decree"
-      : mode === "preview" && !hasRecap
-        ? "next-week"
-        : "weekly-lead",
+    leadStory: danielsCoverContext(d)
+      ? "onion-cover"
+      : bakerSpiteMatchup(d)
+        ? "baker-decree"
+        : mode === "preview" && !hasRecap
+          ? "next-week"
+          : "weekly-lead",
   };
 }
 
@@ -1190,37 +1217,38 @@ export function buildEditorial(d) {
   // satirical premise, labelled as league banter with a satire disclosure.
   bakerDecree(d, add);
 
-  // ---- Onion-style satire cover story: Jayden Daniels "Out" but starting ----
-  // Always emitted. Deadpan reporting of the manager who started a QB flagged
-  // "Out" and then watched his team win by double digits. Every stat is real;
-  // the premise is pure fiction.
-  add(
-    "onion-cover",
-    "The Cover Story",
-    `Red Zone Supernova Starts Jayden Daniels Even Though He's "Out" and Is Projected To Win A Cover Story`,
-    `Ben's team started a QB with an "Out" designation against Chemo Induced Nacua-sea. The algorithm still says they win by 1.47 points. That is exactly the cover story you are reading right now.`,
-    [
-      `Here is the play-by-play in the box, and then the part where you'll actually laugh at yourself for reading this far: Ben's team — Red Zone Supernova 🚨💥 — has Jayden Daniels under center. The NFL injury report says "Out." The Sleeper API says injury is "Out." The fantasy projection system says proj is null. The algorithm says the matchup is still projected to go Ben's way.`,
-      `That is not a contradiction. That is just Week 3, and we're not here for the algorithm's feelings.`,
-      `Ben's lineup is up 90.64 to 77.12 against Tittsburgh Feelers (Caleb Williams, who is also out — so this is a QB-less game where the projections collapse into pure RB/WR/TE variance). The margin is 13.52 points. Jayden Daniels has scored 14.74 fantasy points before the injury, on a day that was already going sideways for Washington's offense. His last live stat was a 10.92-point bench swing for the opponent — meaning if the league had a "what-if" slider for that exact week, Daniels' projected value was still the single biggest swing on the entire slate.`,
-      `The algorithm's projection for the matchup came in at 95.09 for Ben's team vs 93.62 for Tittsburgh. That's a 1.47-point edge. The live score is 90.64–77.12. The algorithm is wrong by 14 points. But the algorithm was built to predict outcomes, not to explain why you started an "Out" QB and then watched your opponent's bench swing outscore your QB's entire output.`,
-      `Here's why this is a cover story and not a footnote: Ben started Jayden Daniels. He looked at "Out" and null and still put him at QB. That is either supreme confidence, supreme stupidity, or a league where the commissioner is also the league's official comic relief. All three are true simultaneously.`,
-      `The matchup is projected to win. The Sleeper projection engine (which doesn't care about your injuries, only about what players score points) still says Ben's team wins by 1.47. This means the algorithm's entire mathematical model for this matchup — built on every player's expected point total across the season — concludes that even with Daniels' absence, Ben's team is the more probable winner. That's a very specific kind of cover story.`,
-      `The algorithm was wrong. The algorithm said 95.09. The score is 90.64–77.12. The algorithm's error on this game is 14 points. The algorithm is not a mystic. It's a spreadsheet with delusions of grandeur.`,
-      `Here's why this is a cover story and not a footnote:`,
-      `Ben started Jayden Daniels. He looked at "Out" and null and still put him at QB. That is either supreme confidence, supreme stupidity, or a league where the commissioner is also the league's official comic relief. All three are true simultaneously. The matchup is projected to win. The Sleeper projection engine still says Ben's team wins by 1.47 points. The algorithm's entire mathematical model for this matchup concludes that even with Daniels' absence, Ben's team is the more probable winner. That's a very specific kind of cover story. The algorithm was wrong. The algorithm said 95.09. The score is 90.64–77.12. The algorithm's error on this game is 14 points. The algorithm is not a mystic. It's a spreadsheet with delusions of grandeur.`,
-      `When this game is in the history books (it's still live; the live score is 90.64), the bench-swing column for Ben's team will read "no swing." There was nothing to swing. Daniels' injury is the bench-swing that happened off the field. The league's legal bench-replacement rule only applies to starters you can actually pull off the field. You can't pull a "Out" QB off the field — the NFL does it for you, and the league's rules don't know about injuries. They know about positions. They know about eligible positions. They don't know about your feelings about Daniels' elbow. That's fine. This is a satirical blog. We know about feelings. The matchup view — Red Zone Supernova vs Tittsburgh — shows the full box behind every score. Go look. You'll see Daniels' name sitting in the QB slot where the algorithm already put it. The algorithm is never wrong. It just doesn't know you asked it.`,
-    ],
-    {
-      satire: true,
-      source_label:
-        "Statistics from the public league data; motives and quotes invented for effect.",
-    },
-  );
-
   const lw = d.last_week;
   const games = lw?.games || [];
   const sides = games.flatMap((g) => [g.a, g.b]);
+  const cover = danielsCoverContext(d);
+  if (cover) {
+    const { side, opponent, player } = cover;
+    const result = `${fmt(side.pts)}–${fmt(opponent.pts)}`;
+    const outcome = side.pts > opponent.pts
+      ? `${side.team} beat ${opponent.team} ${result}`
+      : side.pts < opponent.pts
+        ? `${side.team} lost to ${opponent.team} ${result}`
+        : `${side.team} tied ${opponent.team} ${result}`;
+    add(
+      "onion-cover",
+      "The Cover Story",
+      "Ben Starts Jayden Daniels, Still Projected To Win, In Triumph For Fantasy Football's Most Optimistic Spreadsheet",
+      `${side.team} started Daniels at quarterback in Week ${lw.week}. He scored ${fmt(player.pts)} points; Sleeper's current roster data lists him ${player.injury}. The pregame projection still had Ben's team winning.`,
+      [
+        `${side.team} put Jayden Daniels in the quarterback slot for Week ${lw.week}. The Sleeper feed records ${fmt(player.pts)} fantasy points for him and currently lists him ${player.injury}. The roster row now reads less like a lineup choice and more like a message sent to the future.`,
+        `The pregame projection still favored Ben's team, demonstrating the forecasting model's enviable ability to remain confident without checking whether the quarterback remained available. Analysts say this is not a flaw so much as the projection's commitment to finishing the spreadsheet it started.`,
+        `${outcome}. Daniels' ${fmt(player.pts)} points are included in the team total. The result does not prove the start was wise or foolish; it proves only that fantasy football can reward a manager and injure his quarterback in the same afternoon, sparing the app from having to pick a side.`,
+        `Ben now has the rare distinction of being projected to win while his quarterback is officially out, a situation the league's computers have classified as "within tolerance" and the group chat has classified as content.`,
+      ],
+      {
+        satire: true,
+        period: `Week ${lw.week}`,
+        source_label:
+          "Week 2 lineup, scoring and current injury status are from Sleeper. The pregame projection is the matchup outlook cited for this story; the satirical framing is invented.",
+      },
+    );
+  }
+
   const avg = sides.length
     ? sides.reduce((s, t) => s + t.pts, 0) / sides.length
     : 0;

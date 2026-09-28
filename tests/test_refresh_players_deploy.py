@@ -167,6 +167,14 @@ class RefreshPlayersDeployTests(unittest.TestCase):
 
             self.assertEqual(len(deploys), 2, "the unchanged candidate must be deployed again after failure")
             self.assertTrue(all("--strict" in command for _, command in deploy_commands), "dry-run and publish must enable Wrangler strict mode")
+            self.assertTrue(
+                all(
+                    "--env" in command
+                    and command[command.index("--env") + 1] == "production"
+                    for _, command in deploy_commands
+                ),
+                "dry-run and publish must target the deployed production Worker",
+            )
             self.assertEqual({label for label, _ in deploy_commands}, {"Wrangler dry run", "Wrangler deploy"})
             self.assertEqual(set(syntax_checks), {"index.js", "domain.js", "http-headers.js", "refresh-policy.js", "app.js", "view-models.js", "theme-bootstrap.js"})
             self.assertTrue(all(path != source for path in deploys), "deployment must run from the isolated snapshot")

@@ -9,6 +9,7 @@ import {
   scoreOf,
   pairGames,
   buildEditorial,
+  weekMode,
   refreshWindow,
 } from "../src/domain.js";
 
@@ -89,6 +90,47 @@ test("empty editorial creates no fabricated results", () => {
     }),
     [],
   );
+});
+test("Jayden Daniels cover story is factual, gated to Week 2, and leads Home", () => {
+  const payload = {
+    season: "2026",
+    completed_week: 2,
+    current_week: 3,
+    last_week: {
+      week: 2,
+      games: [{
+        a: {
+          rid: 1,
+          team: "Red Zone Supernova 🚨💥",
+          pts: 90.64,
+          starters: [{ name: "Jayden Daniels", pos: "QB", slot: "QB", pts: 14.74, injury: "Out" }],
+          bench: [],
+        },
+        b: { rid: 2, team: "Tittsburgh Feelers", pts: 77.12, starters: [], bench: [] },
+        margin: 13.52,
+      }],
+      top_performers: [],
+    },
+    next_week: { week: 3, status: "in_progress", games: [] },
+    league: { url: "https://sleeper.com", faab: 100 },
+    transactions: [],
+    standings: [],
+    rivalries: [],
+    players: [],
+  };
+
+  const story = buildEditorial(payload).find((article) => article.id === "onion-cover");
+  assert.ok(story);
+  assert.equal(story.satire, true);
+  assert.equal(story.period, "Week 2");
+  assert.match(story.headline, /Jayden Daniels/);
+  assert.match(story.headline, /Projected To Win/);
+  assert.match(story.body, /14\.74/);
+  assert.match(story.body, /90\.64–77\.12/);
+  assert.equal(weekMode(payload).leadStory, "onion-cover");
+
+  payload.last_week.week = 3;
+  assert.equal(buildEditorial(payload).some((article) => article.id === "onion-cover"), false);
 });
 test("tied games do not produce a fictional winner", () => {
   const side = { rid: 1, team: "A", pts: 70, starters: [], bench: [] };

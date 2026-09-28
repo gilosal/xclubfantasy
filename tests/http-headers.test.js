@@ -1,6 +1,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { rewrittenHtmlHeaders } from "../src/http-headers.js";
+import { isHtmlDocumentRequest, rewrittenHtmlHeaders } from "../src/http-headers.js";
+
+test("API data navigation redirects human HTML requests, not fetch clients", () => {
+  const browser = new Request("https://xclubfantasy.robsplex.com/api/data", {
+    headers: { accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
+  });
+  const fetch = new Request("https://xclubfantasy.robsplex.com/api/data", {
+    headers: { accept: "*/*" },
+  });
+  const json = new Request("https://xclubfantasy.robsplex.com/api/data", {
+    headers: { accept: "application/json" },
+  });
+  assert.equal(isHtmlDocumentRequest(browser), true);
+  assert.equal(isHtmlDocumentRequest(fetch), false);
+  assert.equal(isHtmlDocumentRequest(json), false);
+  assert.equal(isHtmlDocumentRequest(new Request("https://xclubfantasy.robsplex.com/api/data", {
+    method: "HEAD",
+    headers: { accept: "text/html" },
+  })), false);
+});
 
 test("rewritten HTML retains the full static security policy and removes stale length", () => {
   const policy = "default-src 'self'; script-src 'self'; frame-ancestors 'none'";

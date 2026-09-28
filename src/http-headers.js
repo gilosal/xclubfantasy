@@ -1,3 +1,11 @@
+export function isHtmlDocumentRequest(request) {
+  if (request?.method !== "GET") return false;
+  const accept = request.headers?.get("accept") || "";
+  return accept
+    .split(",")
+    .some((type) => type.trim().split(";")[0].toLowerCase() === "text/html");
+}
+
 /** Apply response headers for rewritten static HTML without dropping _headers security policy. */
 export function rewrittenHtmlHeaders(assetHeaders, build) {
   const headers = new Headers(assetHeaders);
