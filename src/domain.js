@@ -84,29 +84,44 @@ export function bestProjBenchSwap(side) {
   return best;
 }
 
-/** Identify the short-lived Week 2 cover story from the actual lineup feed. */
-export function danielsCoverContext(d) {
-  if (String(d?.season) !== "2026" || Number(d?.last_week?.week) !== 2) return null;
-  const game = (d.last_week.games || []).find((g) =>
-    [g?.a, g?.b].some((side) =>
-      (side?.team || "").startsWith("Red Zone Supernova") &&
-      (side?.starters || []).some(
-        (p) =>
-          p.name === "Jayden Daniels" &&
-          p.slot === "QB" &&
-          String(p.injury || "").trim().toLowerCase() === "out",
-      ),
-    ),
+/** Identify the corrected Week 3 cover story from the verified lineup/score feed. */
+export function broncosInterceptionCoverContext(d) {
+  if (String(d?.season) !== "2026") return null;
+  const week3Games = Number(d?.next_week?.week) === 3
+    ? (d.next_week.games || [])
+    : Number(d?.last_week?.week) === 3
+      ? (d.last_week.games || [])
+      : [];
+  const game = week3Games.find((g) =>
+    [g?.a, g?.b].some((side) => (side?.team || "").startsWith("Red Zone Supernova")) &&
+    [g?.a, g?.b].some((side) => (side?.team || "").startsWith("Chemo Induced Nacua-sea")),
   );
   if (!game) return null;
-  const side = [game.a, game.b].find(
-    (t) =>
-      (t?.team || "").startsWith("Red Zone Supernova") &&
-      (t?.starters || []).some((p) => p.name === "Jayden Daniels" && p.slot === "QB"),
+  const ben = [game.a, game.b].find((side) =>
+    (side?.team || "").startsWith("Red Zone Supernova"),
   );
-  if (!side) return null;
-  const player = side.starters.find((p) => p.name === "Jayden Daniels" && p.slot === "QB");
-  return { game, side, opponent: side === game.a ? game.b : game.a, player };
+  const jacob = [game.a, game.b].find((side) =>
+    (side?.team || "").startsWith("Chemo Induced Nacua-sea"),
+  );
+  const player = ben?.starters?.find((p) => p.name === "Jayden Daniels" && p.slot === "QB");
+  const defense = jacob?.starters?.find(
+    (p) => p.pid === "DEN" || (p.name === "Denver Broncos D/ST" && p.pos === "DEF"),
+  );
+  if (!ben || !jacob || !player || !defense) return null;
+
+  // Sleeper still labels Week 3 in progress after this specific matchup finished.
+  // Require its verified final line so a provisional score never reads as a result.
+  const verifiedResult =
+    Math.abs(Number(ben.pts) - 77.6) < 0.005 &&
+    Math.abs(Number(jacob.pts) - 78.38) < 0.005 &&
+    Math.abs(Number(player.pts) - 0) < 0.005 &&
+    Math.abs(Number(defense.pts) - 14) < 0.005;
+  if (
+    !verifiedResult ||
+    String(player.injury || "").trim().toLowerCase() !== "out" ||
+    jacob.pts <= ben.pts
+  ) return null;
+  return { game, ben, jacob, player, defense };
 }
 
 /** Which mode should the homepage lead with? Data-driven, never invented. */
@@ -126,7 +141,7 @@ export function weekMode(d) {
     week: mode === "preview" || live ? d.next_week.week : d.last_week.week,
     nextWeek: d.next_week?.week ?? null,
     status,
-    leadStory: danielsCoverContext(d)
+    leadStory: broncosInterceptionCoverContext(d)
       ? "onion-cover"
       : bakerSpiteMatchup(d)
         ? "baker-decree"
@@ -1220,31 +1235,27 @@ export function buildEditorial(d) {
   const lw = d.last_week;
   const games = lw?.games || [];
   const sides = games.flatMap((g) => [g.a, g.b]);
-  const cover = danielsCoverContext(d);
+  const cover = broncosInterceptionCoverContext(d);
   if (cover) {
-    const { side, opponent, player } = cover;
-    const result = `${fmt(side.pts)}–${fmt(opponent.pts)}`;
-    const outcome = side.pts > opponent.pts
-      ? `${side.team} beat ${opponent.team} ${result}`
-      : side.pts < opponent.pts
-        ? `${side.team} lost to ${opponent.team} ${result}`
-        : `${side.team} tied ${opponent.team} ${result}`;
+    const { ben, jacob, player, defense } = cover;
+    const result = `${fmt(jacob.pts)}–${fmt(ben.pts)}`;
+    const margin = round(jacob.pts - ben.pts);
     add(
       "onion-cover",
       "The Cover Story",
-      "Ben Starts Jayden Daniels, Still Projected To Win, In Triumph For Fantasy Football's Most Optimistic Spreadsheet",
-      `${side.team} started Daniels at quarterback in Week ${lw.week}. He scored ${fmt(player.pts)} points; Sleeper's current roster data lists him ${player.injury}. The pregame projection still had Ben's team winning.`,
+      "Ben’s Projected Week 3 Win Gets Intercepted By Jacob’s Broncos Defense",
+      `${jacob.team} beat ${ben.team} ${result}. Daniels was listed Out and scored ${fmt(player.pts)}; Denver’s D/ST put up ${fmt(defense.pts)}.`,
       [
-        `${side.team} put Jayden Daniels in the quarterback slot for Week ${lw.week}. The Sleeper feed records ${fmt(player.pts)} fantasy points for him and currently lists him ${player.injury}. The roster row now reads less like a lineup choice and more like a message sent to the future.`,
-        `The pregame projection still favored Ben's team, demonstrating the forecasting model's enviable ability to remain confident without checking whether the quarterback remained available. Analysts say this is not a flaw so much as the projection's commitment to finishing the spreadsheet it started.`,
-        `${outcome}. Daniels' ${fmt(player.pts)} points are included in the team total. The result does not prove the start was wise or foolish; it proves only that fantasy football can reward a manager and injure his quarterback in the same afternoon, sparing the app from having to pick a side.`,
-        `Ben now has the rare distinction of being projected to win while his quarterback is officially out, a situation the league's computers have classified as "within tolerance" and the group chat has classified as content.`,
+        `Ben’s Red Zone Supernova entered Week 3 with the pregame outlook in its favor and Jayden Daniels in the quarterback slot, despite Sleeper listing him Out. The lineup delivered the sort of confidence usually associated with a forecast that has not yet refreshed.`,
+        `Daniels finished with ${fmt(player.pts)} points. Jacob’s Chemo Induced Nacua-sea finished with ${fmt(jacob.pts)} to Red Zone’s ${fmt(ben.pts)}, turning the supposedly comfortable outlook into a ${fmt(margin)}-point loss for Ben.`,
+        `Jacob’s Denver Broncos D/ST scored ${fmt(defense.pts)}. The Denver Post reported that Talanoa Hufanga’s 67-yard interception return for a touchdown, with 5:01 remaining against the Rams, gave Denver its first lead. On the fantasy side, that late defensive swing left Jacob ahead by less than a point.`,
+        `The projection had Ben; the final score had Jacob. Week 3 thus supplied a brief seminar in the difference between being favored and having the Broncos defense intercept the ending.`,
       ],
       {
         satire: true,
-        period: `Week ${lw.week}`,
+        period: "Week 3 · Final",
         source_label:
-          "Week 2 lineup, scoring and current injury status are from Sleeper. The pregame projection is the matchup outlook cited for this story; the satirical framing is invented.",
+          "Week 3 lineup, injury status, score and D/ST points: Sleeper. Pick-six details: The Denver Post, Sept. 27, 2026. The pregame projection is the matchup outlook cited for this story.",
       },
     );
   }

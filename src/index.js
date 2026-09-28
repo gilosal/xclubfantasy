@@ -30,7 +30,7 @@ import { forceRefreshDue, schedulePayloadRefresh } from "./refresh-policy.js";
 
 const LID = "1371971946459201536";
 const API = "https://api.sleeper.app/v1";
-const BUILD = "2026-09-28-onion-cover";
+const BUILD = "2026-09-28-jacob-broncos-final";
 const ORIGIN = "https://xclubfantasy.robsplex.com";
 const escAttr = (s) =>
   String(s ?? "").replace(

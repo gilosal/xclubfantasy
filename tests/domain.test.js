@@ -91,27 +91,44 @@ test("empty editorial creates no fabricated results", () => {
     [],
   );
 });
-test("Jayden Daniels cover story is factual, gated to Week 2, and leads Home", () => {
+test("Week 3 Jacob/Broncos cover story corrects the result and leads Home", () => {
+  const week3Game = {
+    mid: 2,
+    a: {
+      rid: 3,
+      team: "Red Zone Supernova 🚨💥",
+      pts: 77.6,
+      starters: [{
+        pid: "11566",
+        name: "Jayden Daniels",
+        pos: "QB",
+        slot: "QB",
+        pts: 0,
+        injury: "Out",
+      }],
+      bench: [],
+    },
+    b: {
+      rid: 6,
+      team: "Chemo Induced Nacua-sea",
+      pts: 78.38,
+      starters: [{
+        pid: "DEN",
+        name: "Denver Broncos D/ST",
+        pos: "DEF",
+        slot: "DEF",
+        pts: 14,
+      }],
+      bench: [],
+    },
+    margin: 0.78,
+  };
   const payload = {
     season: "2026",
     completed_week: 2,
     current_week: 3,
-    last_week: {
-      week: 2,
-      games: [{
-        a: {
-          rid: 1,
-          team: "Red Zone Supernova 🚨💥",
-          pts: 90.64,
-          starters: [{ name: "Jayden Daniels", pos: "QB", slot: "QB", pts: 14.74, injury: "Out" }],
-          bench: [],
-        },
-        b: { rid: 2, team: "Tittsburgh Feelers", pts: 77.12, starters: [], bench: [] },
-        margin: 13.52,
-      }],
-      top_performers: [],
-    },
-    next_week: { week: 3, status: "in_progress", games: [] },
+    last_week: { week: 2, games: [], top_performers: [] },
+    next_week: { week: 3, status: "in_progress", games: [week3Game] },
     league: { url: "https://sleeper.com", faab: 100 },
     transactions: [],
     standings: [],
@@ -122,15 +139,31 @@ test("Jayden Daniels cover story is factual, gated to Week 2, and leads Home", (
   const story = buildEditorial(payload).find((article) => article.id === "onion-cover");
   assert.ok(story);
   assert.equal(story.satire, true);
-  assert.equal(story.period, "Week 2");
-  assert.match(story.headline, /Jayden Daniels/);
-  assert.match(story.headline, /Projected To Win/);
-  assert.match(story.body, /14\.74/);
-  assert.match(story.body, /90\.64–77\.12/);
+  assert.equal(story.period, "Week 3 · Final");
+  assert.match(story.headline, /Jacob’s Broncos Defense/);
+  assert.match(story.headline, /Projected Week 3 Win Gets Intercepted/);
+  assert.match(story.body, /Jayden Daniels/);
+  assert.match(story.body, /0\.00/);
+  assert.match(story.body, /78\.38 to Red Zone’s 77\.60/);
+  assert.match(story.body, /Denver Broncos D\/ST scored 14\.00/);
+  assert.match(story.body, /Talanoa Hufanga’s 67-yard interception/);
+  assert.match(story.source_label, /Sleeper/);
+  assert.match(story.source_label, /Denver Post/);
   assert.equal(weekMode(payload).leadStory, "onion-cover");
 
-  payload.last_week.week = 3;
-  assert.equal(buildEditorial(payload).some((article) => article.id === "onion-cover"), false);
+  const afterRollover = {
+    ...payload,
+    last_week: { week: 3, games: [week3Game], top_performers: [] },
+    next_week: { week: 4, status: "upcoming", games: [] },
+  };
+  assert.ok(buildEditorial(afterRollover).some((article) => article.id === "onion-cover"));
+  afterRollover.last_week = { week: 4, games: [week3Game], top_performers: [] };
+  afterRollover.next_week = { week: 5, status: "upcoming", games: [] };
+  assert.equal(buildEditorial(afterRollover).some((article) => article.id === "onion-cover"), false);
+
+  const provisional = JSON.parse(JSON.stringify(payload));
+  provisional.next_week.games[0].b.pts = 78.37;
+  assert.equal(buildEditorial(provisional).some((article) => article.id === "onion-cover"), false);
 });
 test("tied games do not produce a fictional winner", () => {
   const side = { rid: 1, team: "A", pts: 70, starters: [], bench: [] };
