@@ -51,8 +51,10 @@ test("baker-decree is emitted when Emery starts Baker and faces Tuten Hurts", ()
   const articles = buildEditorial(d);
   const lead = articles.find(a => a.id === "baker-decree");
   assert.ok(lead, "baker-decree article present");
-  assert.equal(lead.satire, true);
-  assert.equal(lead.tag, "League banter");
+  assert.equal(lead.column, true);
+  assert.equal(lead.tag, "The Cheap Seats");
+  assert.match(lead.source_label, /public league data/);
+  assert.doesNotMatch(lead.dek + lead.body + lead.source_label, /satire|invented|banter/i);
   assert.equal(lead.rid, 7);
   assert.equal(lead.hero?.src, "/memes/baker-decree.gif", "meme hero attached");
   // real stats are woven in

@@ -165,7 +165,7 @@ export function refreshWindow(d) {
 
 /**
  * True while the upcoming slate features Emery's Hash Browns vs. Tuten Hurts.
- * This is the week gate for the "Baker decree" league-banter lead story: the
+ * This is the week gate for the "Baker decree" opinion-column lead story: the
  * matchup only exists in `next_week` during that week, so the article and its
  * lead-story status appear and disappear automatically as the week advances.
  */
@@ -1132,7 +1132,7 @@ export function ogMeta(pathname, d) {
   if (pathname === "/" || pathname === "") {
     const lw = d?.last_week;
     const lead = (d?.articles || []).find((a) => a.id === (d?.week_mode?.leadStory || "weekly-lead"));
-    if (lead?.satire) {
+    if (lead?.column) {
       return {
         title: lead.headline,
         description: lead.dek,
@@ -1281,14 +1281,13 @@ export function gameStory(g, d) {
 }
 
 /**
- * The "Baker decree" — a league-banter (satire) lead story.
+ * The "Baker decree" — the league's opinion-column lead story.
  *
  * Returns the article (added via `add`) and true when it was created, or
  * null when the gate isn't met. Gating: the upcoming week must feature
  * Emery's Hash Browns vs. Tuten Hurts AND we must be able to find Baker
  * Mayfield on Emery's projected Week-2 starting lineup. Every number is
- * pulled live from the payload, so the satire stays grounded in real data;
- * the "spite Brock Stars" motive is the invented premise (labelled banter).
+ * pulled live from the payload; only the column's premise is dramatized.
  */
 function bakerDecree(d, add) {
   const games = d.next_week?.games || [];
@@ -1356,7 +1355,7 @@ function bakerDecree(d, add) {
 
   add(
     "baker-decree",
-    "League banter",
+    "The Cheap Seats",
     headline,
     dek,
     paras,
@@ -1365,8 +1364,8 @@ function bakerDecree(d, add) {
       metric: baker.proj,
       metric_label: "Projected pts",
       rid: emery.rid,
-      satire: true,
-      source_label: "Statistics from the public league data; motives and quotes invented for effect.",
+      column: true,
+      source_label: "Statistics, standings, and projections from the public league data.",
       hero: {
         src: "/memes/baker-decree.gif",
         alt: "League-minted meme: a Bucswear-wearing Baker Mayfield with his arms spread wide",
@@ -1400,17 +1399,66 @@ export function waiverDispatchArticle(d, day) {
   const budget = Number(d.league?.faab) || 0;
   const share = budget > 0 ? Math.round((Number(lead.bid) / budget) * 100) : null;
   const headline = `${winner.teamName} Puts $${Number(lead.bid)} On ${winner.name}; League Budget Issues Formal Statement`;
-  const dek = `The biggest confirmed waiver bid this morning: $${Number(lead.bid)} for ${winner.name}${share != null ? `, or ${share}% of the $${budget} starting FAAB budget` : ""}. The figures are real; the bureaucracy is not.`;
   const dropped = (lead.drops || []).map((p) => p.name).filter(Boolean);
+  const count = bids.length;
+  const total = bids.reduce((sum, move) => sum + Number(move.bid), 0);
+  const teams = Array.isArray(d.standings) ? d.standings.length : 0;
+  const leagueBudget = budget > 0 && teams > 0 ? budget * teams : null;
+  const leagueShare = leagueBudget ? Math.round((total / leagueBudget) * 100) : null;
+  const pick = (move) => move.adds.find((p) => p?.name && p?.teamName);
+  const dropsOf = (move) => (move.drops || []).map((p) => p.name).filter(Boolean);
+  const moveText = (move) => {
+    const p = pick(move);
+    const drops = dropsOf(move);
+    return `${p.name} to ${p.teamName} at $${Number(move.bid)}${drops.length ? ` (${drops.join(", ")} released)` : ""}`;
+  };
+  const dek = `The biggest confirmed waiver bid this morning: $${Number(lead.bid)} for ${winner.name}${share != null ? `, or ${share}% of the $${budget} starting FAAB budget` : ""} — the top of a morning that moved $${total} across ${count} completed claim${count === 1 ? "" : "s"}.`;
+
   const paragraphs = [
-    `${winner.teamName} acquired ${winner.name} on a completed $${Number(lead.bid)} waiver claim${dropped.length ? ` and dropped ${dropped.join(", ")}` : ""}. With ${share != null ? `${share}% of the league's starting FAAB budget` : "a recorded bid"} committed to one transaction, the waiver desk has reportedly requested a separate desk for the receipt. The desk is fictional; the transaction is not.`,
+    `${winner.teamName} won the morning's headline transaction: a completed $${Number(lead.bid)} waiver claim on ${winner.name}${dropped.length ? `, with ${dropped.join(", ")} released to make room` : ""}. ${share != null ? `That is ${share}% of the league's $${budget} starting FAAB budget committed to a single roster spot` : "That is the largest bid of the day"}, and the waiver desk has reportedly requested a separate desk just for the receipt.`,
   ];
-  for (const move of bids.slice(1, 4)) {
-    const p = move.adds.find((x) => x?.name && x?.teamName);
-    const drops = (move.drops || []).map((x) => x.name).filter(Boolean);
-    paragraphs.push(`${p.teamName} also won a completed claim on ${p.name} for $${Number(move.bid)}${drops.length ? `, releasing ${drops.join(", ")}` : ""}. The league's imaginary appropriations committee has declined to comment.`);
+
+  const second = bids[1];
+  if (second) {
+    const p = pick(second);
+    const drops = dropsOf(second);
+    const doubleDigits = bids.filter((move) => Number(move.bid) >= 10).length;
+    const gap = Number(lead.bid) - Number(second.bid);
+    paragraphs.push(`The next-biggest bid was quieter: ${p.teamName} landed ${p.name} for $${Number(second.bid)}${drops.length ? `, releasing ${drops.join(", ")}` : ""}; $${gap} less than the day's top price${doubleDigits === 2 ? ", and the only other double-digit bid of the morning" : ""}.`);
   }
-  paragraphs.push(`These are completed ${day} claims recorded by Sleeper, not recommendations or pending bids. The public log does not show every losing offer or anyone's private reasoning. Satirical institutions and reactions are invented for effect; no real person is quoted.`);
+
+  const mids = bids.slice(2, 6);
+  if (mids.length) {
+    paragraphs.push(`Behind them came the working middle of the wire: ${mids.map(moveText).join("; ")}. Quiet money, real roster spots.`);
+  }
+
+  const tail = bids.slice(6);
+  if (tail.length) {
+    paragraphs.push(`The rest of the morning settled as follows: ${tail.map(moveText).join("; ")}. No headlines among them, but every claim counts.`);
+  }
+
+  const isDef = (p) => /^DEF$|D\/ST|Defense/i.test(String(p?.pos || "")) || /D\/ST/.test(String(p?.name || ""));
+  const defs = bids.filter((move) => isDef(pick(move)));
+  if (defs.length >= 2) {
+    const defSpend = defs.reduce((sum, move) => sum + Number(move.bid), 0);
+    const free = defs.some((move) => Number(move.bid) === 0) ? ", one of them for nothing at all" : "";
+    paragraphs.push(`The wire's defense aisle cleared out too: ${defs.length} defenses changed hands for $${defSpend} combined${free}.`);
+  }
+
+  const st = (d.standings || []).find((s) => s.name === winner.teamName);
+  const spent = Number(st?.faab_used);
+  if (Number.isFinite(spent) && budget > 0) {
+    paragraphs.push(spent >= budget
+      ? `For ${winner.teamName}, the math is stark: today's bid empties a full $${budget} season budget. The remaining waiver runs must now be won on taste alone.`
+      : `For ${winner.teamName}, today's bid brings season FAAB spending to $${spent} of $${budget}.`);
+  }
+
+  if (leagueBudget) {
+    paragraphs.push(`All told, the morning's ${count} completed claims moved $${total} — roughly ${leagueShare}% of the league's combined $${leagueBudget} in starting budgets.`);
+  }
+
+  paragraphs.push(`These are completed ${day} claims recorded by Sleeper, not recommendations or pending bids.`);
+
   return {
     id: `w${week}-waiver-dispatch`,
     tag: "The Waiver Desk",
@@ -1420,8 +1468,8 @@ export function waiverDispatchArticle(d, day) {
     byline: "XClub • Waiver Desk",
     period: `Week ${week} · Waiver edition`,
     source_url: d.league?.url || "https://sleeper.com/leagues/1371971946459201536",
-    source_label: "Players, teams, and transaction details come from completed public Sleeper records. All Onion-style framing is satire; motives and quotes are not attributed.",
-    satire: true,
+    source_label: "Players, teams, and transaction details come from completed public Sleeper records.",
+    column: true,
   };
 }
 
@@ -1441,12 +1489,11 @@ export function buildEditorial(d) {
       ...extra,
     });
 
-  // ---- League banter / satire lead: the "Baker decree" ---------------------
+  // ---- Opinion-column lead: the "Baker decree" ------------------------------
   // Emitted only while Emery's Hash Browns face Tuten Hurts in the upcoming
   // week. It becomes the home lead that week (via weekMode.leadStory) while the
   // normal data articles below still render as the secondary cards. Every
-  // number is pulled live from the payload (real); the motive is the
-  // satirical premise, labelled as league banter with a satire disclosure.
+  // number is pulled live from the payload; only the premise is dramatized.
   bakerDecree(d, add);
 
   const lw = d.last_week;
@@ -1469,7 +1516,7 @@ export function buildEditorial(d) {
         `The projection had Ben; the final score had Jacob. Week 3 thus supplied a brief seminar in the difference between being favored and having the Broncos defense intercept the ending.`,
       ],
       {
-        satire: true,
+        column: true,
         period: "Week 3 · Final",
         source_label:
           "Week 3 lineup, injury status, score and D/ST points: Sleeper. Pick-six details: The Denver Post, Sept. 27, 2026. The pregame projection is the matchup outlook cited for this story.",

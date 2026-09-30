@@ -4,7 +4,7 @@ function validEntry(entry, season) {
   const week = Number(entry?.week);
   const article = entry?.article;
   if (String(entry?.season) !== season || !Number.isInteger(week) || week < 1 || week > MAX_WEEK) return false;
-  if (article?.id !== `w${week}-waiver-dispatch` || article?.satire !== true) return false;
+  if (article?.id !== `w${week}-waiver-dispatch` || article?.column !== true) return false;
   return ["tag", "headline", "dek", "body", "byline", "period", "source_url", "source_label"]
     .every((key) => typeof article[key] === "string" && article[key].trim().length > 0);
 }

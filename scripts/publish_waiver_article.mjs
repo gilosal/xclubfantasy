@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Publish one Wednesday-after-waivers satire edition per season/week.
+// Publish one Wednesday-after-waivers newsroom edition per season/week.
 // The only external write is the single season manifest in the production
 // XCF_KV namespace. No LLM, credentials, or guessed transaction details.
 import { execFileSync } from "node:child_process";

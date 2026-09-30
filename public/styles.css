@@ -555,17 +555,17 @@ h3 {
   border-bottom: 1px solid var(--line);
   padding-bottom: 22px;
 }
-/* The league-banter lead reads as an opinion column: a red spine and a
-   slightly larger dek to signal "this is the fun one" without changing layout. */
-.lead-banter {
+/* The opinion-column lead: a red spine and a slightly larger dek to signal
+   "this is the fun one" without changing layout. */
+.lead-column {
   border-top: 4px solid var(--red);
   padding-top: 18px;
 }
-.lead-banter .lead-dek {
+.lead-column .lead-dek {
   font-size: 17px;
   color: var(--ink);
 }
-.lead-banter .lead-copy .eyebrow {
+.lead-column .lead-copy .eyebrow {
   color: var(--red);
 }
 .lead-copy .eyebrow {
@@ -2087,8 +2087,8 @@ dialog::backdrop {
   margin-top: 14px;
   letter-spacing: -0.8px;
 }
-/* League-minted meme banner for banter leads: a self-contained block above
-   the headline so the joke sets the tone before the byline does. */
+/* Meme banner for opinion-column leads: a self-contained block above the
+   headline so the joke sets the tone before the byline does. */
 .article-hero {
   display: block;
   width: 100%;
@@ -2097,22 +2097,6 @@ dialog::backdrop {
   border: 1px solid var(--line);
   border-bottom: 4px solid var(--red);
   background: var(--art-bg);
-}
-.satire-note {
-  font: 12px/1.6 var(--sans);
-  letter-spacing: 0.3px;
-  text-transform: none;
-  color: var(--injury-text);
-  background: color-mix(in srgb, var(--injury-text) 12%, var(--paper-2));
-  border: 1px solid color-mix(in srgb, var(--injury-text) 35%, var(--line));
-  border-left: 4px solid var(--injury-text);
-  padding: 12px 14px;
-  margin-top: 10px;
-  border-radius: 2px;
-}
-/* In dark mode the red-on-maroon text only hits ~4:1; off-white is safer. */
-[data-theme="dark"] .satire-note {
-  color: var(--ink);
 }
 .article-content .article-dek {
   font: 18px/1.55 var(--sans);

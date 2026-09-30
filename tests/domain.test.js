@@ -138,7 +138,8 @@ test("Week 3 Jacob/Broncos cover story corrects the result and leads Home", () =
 
   const story = buildEditorial(payload).find((article) => article.id === "onion-cover");
   assert.ok(story);
-  assert.equal(story.satire, true);
+  assert.equal(story.column, true);
+  assert.doesNotMatch(story.body + story.source_label, /satire|fictional|imaginary|invented/i);
   assert.equal(story.period, "Week 3 · Final");
   assert.match(story.headline, /Jacob’s Broncos Defense/);
   assert.match(story.headline, /Projected Week 3 Win Gets Intercepted/);

@@ -548,7 +548,7 @@ export async function buildPayload() {
       history:
         "Completed regular-season meetings only. Champions are winners of the first-place playoff game, not the regular-season standings.",
       editorial:
-        "Automated, data-based league analysis. No reported interviews or invented quotes. The Cheap Seats is labelled league banter.",
+        "Automated, data-based league analysis. Every figure traces to the league's public data.",
     },
   };
   payload.team_form = {};

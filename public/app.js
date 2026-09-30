@@ -177,20 +177,20 @@ function renderHome(d) {
   );
   const opp = next ? (String(next.a.rid) === followed ? next.b : next.a) : null;
   const top = d.last_week?.team_of_the_week;
-  const banterLead = !!(lead && lead.satire);
+  const columnLead = !!(lead && lead.column);
   const leadEyebrow = !lead
     ? ""
-    : banterLead
+    : columnLead
       ? `${lead.tag} · ${lead.period || "Week " + (wm.nextWeek ?? "—") + " preview"}`
       : `${lead.tag} · ${weekLabel}${wm.mode === "live" ? " · In progress" : ""}`;
-  const leadCta = banterLead
+  const leadCta = columnLead
     ? "Read the column"
     : wm.mode === "preview"
       ? "Read the preview"
       : "Read the weekly review";
   $("view-home").innerHTML =
     `${renderScoreboard(d)}<div class="home-layout"><div class="home-main">
-    ${lead ? `<article class="lead${banterLead ? " lead-banter" : ""}"><div class="lead-copy"><span class="eyebrow">${esc(leadEyebrow)}</span><h1><a href="#story/${esc(lead.id)}" data-story="${esc(lead.id)}">${esc(lead.headline)}</a></h1><p class="lead-dek">${esc(lead.dek)}</p><div class="lead-meta">XClub / League desk</div>${storyLink(lead, leadCta)}</div>${featureArt(lead)}</article>` : intro("The new season", "Every week starts here.", "The first completed scores will bring the weekly review. Until then, take a look at the matchups and starting lineups.")}
+    ${lead ? `<article class="lead${columnLead ? " lead-column" : ""}"><div class="lead-copy"><span class="eyebrow">${esc(leadEyebrow)}</span><h1><a href="#story/${esc(lead.id)}" data-story="${esc(lead.id)}">${esc(lead.headline)}</a></h1><p class="lead-dek">${esc(lead.dek)}</p><div class="lead-meta">XClub / League desk</div>${storyLink(lead, leadCta)}</div>${featureArt(lead)}</article>` : intro("The new season", "Every week starts here.", "The first completed scores will bring the weekly review. Until then, take a look at the matchups and starting lineups.")}
     ${awardStrip(d)}
     ${homeHypeSection(d)}
     ${tnfCard(d)}
@@ -208,7 +208,7 @@ function renderHome(d) {
     }</div><a class="text-link" href="#players">Explore the players</a></section>
     ${selectStories(["waiver-notebook", "draft-notebook", "player-of-week"]).length ? `<section class="feature-row">${head("The notebook", "Beyond the score")}<div class="story-grid">${selectStories(["waiver-notebook", "draft-notebook", "player-of-week"]).map(storyCard).join("")}</div></section>` : ""}
     ${injuryRoom(d)}
-    <section class="feature-row cheap-seats"><span class="eyebrow">The cheap seats · League banter</span><h3>${top ? `${esc(top.name)}, the screenshot is probably saved by now.` : "The group chat is undefeated."}</h3><p>${top ? `${f(top.pts)} points is a perfectly reasonable excuse to check the standings again. Enjoy it. The next lineup still needs setting.` : "Every season begins with twelve convincing explanations for why this is the year."}</p></section>
+    <section class="feature-row cheap-seats"><span class="eyebrow">The cheap seats</span><h3>${top ? `${esc(top.name)}, the screenshot is probably saved by now.` : "The group chat is undefeated."}</h3><p>${top ? `${f(top.pts)} points is a perfectly reasonable excuse to check the standings again. Enjoy it. The next lineup still needs setting.` : "Every season begins with twelve convincing explanations for why this is the year."}</p></section>
   </div><aside class="home-aside" aria-label="League at a glance">
     <section class="follow-box"><span class="eyebrow">Your corner of the league</span><label for="followTeam">Follow your team</label><select id="followTeam"><option value="">Choose a team</option>${d.standings.map((t) => `<option value="${t.rid}" ${followed === String(t.rid) ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select>${followTeam ? `<div class="follow-summary"><p><strong>${esc(followTeam.name)}</strong></p><p>${rec(followTeam)} · ${f(followTeam.fpts)} points for</p>${opp ? `<p>Week ${d.next_week.week}: vs. ${esc(opp.team)}</p>` : ""}<a class="text-link" href="#matchups">See the matchup</a></div>` : '<p class="follow-note">Keep your team in view. Saved only on this device; no account needed.</p>'}</section>
     <section>${head("The table", `Week ${d.completed_week}`)}<ol class="rail-list">${d.standings
@@ -692,18 +692,15 @@ function showArticle(id) {
     $("articleDialog").scrollTop = 0;
     return;
   }
-  const satireNote = a.satire
-    ? `<p class="satire-note">This is league banter. The statistics are real and come from the league's public Sleeper data; the motives, personality, and quotes are invented for effect and are not attributed to anyone.</p>`
-    : "";
   const hero = a.hero
     ? `<img class="article-hero" src="${esc(a.hero.src)}" alt="${esc(a.hero.alt || a.headline)}" width="280" height="280">`
     : "";
   $("articleContent").innerHTML =
-    `${hero}<span class="eyebrow">${esc(a.tag)}${a.period ? ` · ${esc(a.period)}` : ` · ${DATA.season}`}</span>${satireNote}<h1 id="articleTitle">${esc(a.headline)}</h1><p class="article-dek">${esc(a.dek)}</p><div class="article-byline">${esc(a.byline)} · Updated ${esc(date(DATA.asof))} ET</div><div class="article-body">${a.body
+    `${hero}<span class="eyebrow">${esc(a.tag)}${a.period ? ` · ${esc(a.period)}` : ` · ${DATA.season}`}</span><h1 id="articleTitle">${esc(a.headline)}</h1><p class="article-dek">${esc(a.dek)}</p><div class="article-byline">${esc(a.byline)} · Updated ${esc(date(DATA.asof))} ET</div><div class="article-body">${a.body
       .split("\n\n")
       .map((p) => `<p>${esc(p)}</p>`)
-      .join("")}</div><div class="article-source">${a.satire
-      ? `League banter. ${esc(a.source_label || "Stats from public league data; motives paraphrased, not sourced.")}`
+      .join("")}</div><div class="article-source">${a.column
+      ? esc(a.source_label || "Based on public league box scores, lineups and transaction records. Automatically assembled analysis.")
       : "Based on public league box scores, lineups and transaction records. Automatically assembled analysis; no interviews or attributed quotes."}<br><a href="${esc(a.source_url)}" target="_blank" rel="noopener noreferrer">Check the league on Sleeper ↗</a></div><div class="article-actions"><button id="shareArticle">Share this story</button><a href="#matchups">Explore the matchups →</a><span id="shareStatus" class="share-status" role="status"></span></div>`;
   document.title = `${a.headline} | XClub Fantasy`;
   if (!$("articleDialog").open) {

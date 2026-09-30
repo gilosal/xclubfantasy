@@ -83,15 +83,23 @@ test("waiver dispatch covers only Wednesday's completed claims for the preceding
     { id: "prior", week: 3, when: Date.parse("2026-09-23T07:04:25Z"), type: "waiver", bid: 99, adds: [{ name: "Past Player", teamName: "Beta", pos: "RB" }], drops: [] },
     { id: "different-leg", week: 4, when: Date.parse("2026-09-30T07:04:25Z"), type: "waiver", bid: 101, adds: [{ name: "Wrong Leg", teamName: "Gamma", pos: "WR" }], drops: [] },
     { id: "ollie", week: 3, when: Date.parse("2026-09-30T07:04:25Z"), type: "waiver", bid: 100, adds: [{ name: "Ollie Gordon", teamName: "Alpha", pos: "RB", team: "MIA" }], drops: [{ name: "Mike Washington Jr." }] },
+    { id: "sadiq", week: 3, when: Date.parse("2026-09-30T07:05:25Z"), type: "waiver", bid: 22, adds: [{ name: "Kenyon Sadiq", teamName: "Gamma", pos: "TE" }], drops: [{ name: "Dontayvion Wicks" }] },
+    { id: "bears", week: 3, when: Date.parse("2026-09-30T07:06:25Z"), type: "waiver", bid: 2, adds: [{ name: "Chicago Bears", teamName: "Delta", pos: "DEF" }], drops: [] },
+    { id: "packers", week: 3, when: Date.parse("2026-09-30T07:07:25Z"), type: "waiver", bid: 0, adds: [{ name: "Green Bay Packers", teamName: "Beta", pos: "DEF" }], drops: [] },
   ];
   const article = waiverDispatchArticle(d, "2026-09-30");
   assert.ok(article);
-  assert.equal(article.satire, true);
+  assert.equal(article.column, true);
   assert.equal(article.period, "Week 4 · Waiver edition");
   assert.match(article.headline, /Alpha|Ollie Gordon/);
   assert.match(article.body, /\$100/);
   assert.match(article.body, /Ollie Gordon/);
   assert.match(article.body, /Mike Washington Jr\./);
+  assert.match(article.body, /Kenyon Sadiq/);
+  assert.match(article.body, /Chicago Bears/);
+  assert.match(article.body, /4 completed claims moved \$124/);
+  assert.ok(article.body.split("\n\n").length >= 6, "full roundup, not a stub");
+  assert.doesNotMatch(article.body + article.dek + article.source_label, /satire|fictional|imaginary|invented|banter/i, "no satire-warning language");
   assert.doesNotMatch(article.body, /Past Player|Wrong Leg|undefined|NaN/);
   assert.match(article.source_label, /public Sleeper/);
   assert.equal(buildEditorial(d).some((a) => a.id === article.id), false, "not released before cron publication");
