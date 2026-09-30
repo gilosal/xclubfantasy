@@ -17,7 +17,7 @@ def main():
         cwd=str(PUBLISHER.parent.parent),
         capture_output=True,
         text=True,
-        timeout=180,
+        timeout=300,
         check=False,
     )
     if result.returncode:

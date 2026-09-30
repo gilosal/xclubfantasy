@@ -25,6 +25,7 @@ const weekday = zoned(now, { weekday: "short" });
 function run(cmd, args) {
   return execFileSync(cmd, args, { cwd: root, encoding: "utf8", timeout: 90000, maxBuffer: 4 * 1024 * 1024 });
 }
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 function kv(args) {
   if (!existsSync(wrangler)) throw new Error("Pinned local Wrangler installation is missing; no publication was attempted");
   return run(process.execPath, [wrangler, "kv", "key", ...args, "--binding", "XCF_KV", "--remote", "--config", "wrangler.jsonc"]);
@@ -38,7 +39,7 @@ function livePayload() {
   return d;
 }
 
-function main() {
+async function main() {
   if (weekday !== "Wed") return; // scheduler may retry on another day; never reuse old claims
   const d = livePayload();
   const article = waiverDispatchArticle(d, day);
@@ -72,17 +73,21 @@ function main() {
   const stored = JSON.parse(kv(["get", key, "--text"]));
   if (!Array.isArray(stored) || !stored.some((item) => item.week === entry.week && item.article?.headline === article.headline)) throw new Error("KV read-back does not contain the new edition");
   // The API overlays the manifest on both cached and refreshed league payloads.
-  // Read the exact live story back before announcing; no second write/retry.
-  const live = livePayload();
-  if (!(live.articles || []).some((item) => item.id === article.id && item.headline === article.headline) ||
-      !(live.archive || []).some((week) => Number(week.week) === entry.week && (week.articles || []).some((item) => item.id === article.id))) {
-    throw new Error("KV write succeeded, but production article/archive read-back has not propagated yet; no duplicate write");
+  // KV is eventually consistent (~60 s), so poll the live read-back a few times
+  // before declaring failure; the article itself is never written twice.
+  let live = null;
+  for (let attempt = 1; attempt <= 5 && !live; attempt++) {
+    if (attempt > 1) await sleep(20000);
+    const probe = livePayload();
+    if ((probe.articles || []).some((item) => item.id === article.id && item.headline === article.headline) &&
+        (probe.archive || []).some((week) => Number(week.week) === entry.week && (week.articles || []).some((item) => item.id === article.id))) {
+      live = probe;
+    }
   }
+  if (!live) throw new Error("KV write succeeded, but production article/archive read-back has not propagated after retries; no duplicate write");
   console.log(`📰 **${article.headline}**\n${article.dek}\n\nRead the full Onion-style waiver dispatch: ${site}/#story/${article.id}\nFiled in the archive: ${site}/#archive`);
 }
-try {
-  main();
-} catch (err) {
+main().catch((err) => {
   console.error(`XClub waiver publication failed: ${err.message}`);
   process.exitCode = 1;
-}
+});
