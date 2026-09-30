@@ -80,5 +80,8 @@ export function resolveGameLink(lastWeek, nextWeek, requestedWeek, mid) {
 /** Preserve pathname-based share links while the app is otherwise hash-routed. */
 export function initialRoute(hash, pathname) {
   const route = String(hash || "").replace(/^#/, "");
-  return route || (pathname === "/weekend" ? "weekend" : "home");
+  if (route) return route;
+  if (pathname === "/weekend") return "weekend";
+  if (pathname === "/archive") return "archive";
+  return "home";
 }

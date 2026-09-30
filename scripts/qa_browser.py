@@ -30,13 +30,13 @@ async def main():
                 await page.screenshot(path=str(OUT/f'home-{width}.png'),full_page=True)
                 if width==390: await page.screenshot(path=str(OUT/'phone-first-screen.png'))
                 if width==390:
-                    tnf=page.locator('.tnf-feature')
+                    tnf=page.locator('#view-home .tnf-feature')
                     await expect(tnf).to_be_visible()
                     assert await tnf.count()==1
                     tnf_state=await tnf.evaluate("""el=>{const sides=[...el.querySelectorAll('.tnf-side')];const values=sides.map(s=>{const n=Number((s.querySelector('.tnf-pts')?.textContent||'').replace(/,/g,''));return Number.isFinite(n)?n:null});const favorite=sides.findIndex(s=>s.classList.contains('tnf-fav'));const expected=values.length!==2||values.some(v=>v===null)||values[0]===values[1]?-1:values[0]>values[1]?0:1;return{values,favorite,expected}}""")
                     assert tnf_state['favorite']==tnf_state['expected'],tnf_state
                     checks['tnf_projection_favorite']=tnf_state
-                for nav in ['matchups','standings','players','history']:
+                for nav in ['matchups','standings','players','history','archive']:
                     await page.locator(f'[data-nav="{nav}"]').click()
                     await expect(page.locator(f'#view-{nav}')).to_be_visible()
                     assert not (await overflow(page))['overflow'],f'{width}: {nav} overflow'
@@ -88,6 +88,15 @@ async def main():
                     checks['search_filters_empty_pagination']=True
                     await page.locator('[data-nav="history"]').click()
                     assert 'firegettleman1' in await page.locator('.champions').inner_text()
+                    await page.locator('[data-nav="archive"]').click()
+                    archive_sections=page.locator('#view-archive .archive-week')
+                    assert await archive_sections.count()>0
+                    await expect(page.locator('#archiveViews')).to_be_visible(timeout=5000)
+                    await page.locator('#view-archive a[data-story]').first.click()
+                    await expect(page.locator('#articleDialog')).to_be_visible()
+                    assert len(await page.locator('.article-body').inner_text())>200
+                    checks['archive_story_and_views']=True
+                    await page.locator('#closeArticle').click()
                     await page.goto(URL+'/#story/bench-notebook',wait_until='networkidle')
                     await expect(page.locator('#articleDialog')).to_be_visible()
                     await page.keyboard.press('Escape')

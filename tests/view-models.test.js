@@ -74,3 +74,10 @@ test("Hype share pathname initializes the Hype route, but explicit hash wins", (
   assert.equal(initialRoute("#weekend", "/"), "weekend");
   assert.equal(initialRoute("", "/"), "home");
 });
+
+test("archive deep link (no hash) opens the archive view; hash still wins", () => {
+  assert.equal(initialRoute("", "/archive"), "archive");
+  assert.equal(initialRoute("#archive", "/"), "archive");
+  assert.equal(initialRoute("#home", "/archive"), "home");
+  assert.equal(initialRoute("", "/players"), "home");
+});

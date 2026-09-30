@@ -7,7 +7,7 @@
       content="width=device-width,initial-scale=1,viewport-fit=cover"
     />
     <meta name="theme-color" content="#161a20" />
-    <script src="/theme-bootstrap.js?v=20260928-onion-cover"></script>
+    <script src="/theme-bootstrap.js?v=20260930-waiver-publish"></script>
     <title>XClub Fantasy | Tom Byrne Memorial League</title>
     <meta
       name="description"
@@ -30,8 +30,8 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=20260928-onion-cover" />
-    <script type="module" src="/app.js?v=20260928-onion-cover"></script>
+    <link rel="stylesheet" href="/styles.css?v=20260930-waiver-publish" />
+    <script type="module" src="/app.js?v=20260930-waiver-publish"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -140,6 +140,13 @@
             /></svg
           ><span>History</span></a
         >
+        <a href="#archive" data-nav="archive"
+          ><svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M4 5h16v4H4zM5 9h14v10a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1zM10 13h4v4h-4z"
+            /></svg
+          ><span>Archive</span></a
+        >
         <a href="#weekend" data-nav="weekend"
           ><svg viewBox="0 0 24 24" aria-hidden="true">
             <path
@@ -216,6 +223,12 @@
           id="view-history"
           class="view"
           aria-label="League history"
+          hidden
+        ></section>
+        <section
+          id="view-archive"
+          class="view"
+          aria-label="Article archive"
           hidden
         ></section>
       </div>

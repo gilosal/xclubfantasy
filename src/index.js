@@ -1,6 +1,7 @@
 // XClub: public, read-only league coverage. No Sleeper credentials are used.
 import BUNDLE from "../public/data/players.json";
 import HISTORY from "../public/data/history.json";
+import { BUILD } from "./build.js";
 import {
   round,
   rosterPoints,
@@ -24,13 +25,16 @@ import {
   buildEditorial,
   slateArticles,
   slateFinalArticles,
+  archiveWeeks,
+  standingsThroughWeeks,
 } from "./domain.js";
+import { trackView, viewsSummary } from "./track.js";
+import { withPublishedArticles } from "./published-articles.js";
 import { isHtmlDocumentRequest, rewrittenHtmlHeaders } from "./http-headers.js";
 import { forceRefreshDue, schedulePayloadRefresh } from "./refresh-policy.js";
 
 const LID = "1371971946459201536";
 const API = "https://api.sleeper.app/v1";
-const BUILD = "2026-09-28-jacob-broncos-final";
 const ORIGIN = "https://xclubfantasy.robsplex.com";
 const escAttr = (s) =>
   String(s ?? "").replace(
@@ -217,41 +221,42 @@ export async function buildPayload() {
         total: round(scoreOf(a) + scoreOf(b)),
       }))
       .sort((a, b) => a.mid - b.mid);
+  const buildWeekRecord = (rows, week, includeStandings = false) => {
+    const games = makeGames(rows || []);
+    if (!games.length) return null;
+    const sides = games.flatMap((g) => [g.a, g.b]);
+    const topSides = [...sides].sort((a, b) => b.pts - a.pts);
+    return {
+      week,
+      games,
+      top_performers: sides
+        .flatMap((s) =>
+          s.starters.map((p) => ({ ...p, rid: s.rid, teamName: s.team })),
+        )
+        .filter((p) => p.pts != null)
+        .sort((a, b) => b.pts - a.pts)
+        .slice(0, 12),
+      team_of_the_week: topSides[0]
+        ? {
+            rid: topSides[0].rid,
+            name: topSides[0].team,
+            pts: topSides[0].pts,
+          }
+        : null,
+      blowout: [...games].sort((a, b) => b.margin - a.margin)[0],
+      nail_biter: [...games].sort((a, b) => a.margin - b.margin)[0],
+      average: round(
+        sides.reduce((s, t) => s + t.pts, 0) / Math.max(1, sides.length),
+      ),
+      ...(includeStandings ? { standings: standingsThroughWeeks(teams, completedRows, week) } : {}),
+    };
+  };
   const lastRows = lw ? completedRows[lw - 1] || [] : [];
-  const lastGames = makeGames(lastRows);
-  const lastSides = lastGames.flatMap((g) => [g.a, g.b]);
-  const topSides = [...lastSides].sort((a, b) => b.pts - a.pts);
   const lastPoints = new Map();
   for (const m of lastRows)
     for (const [pid, pts] of Object.entries(m.players_points || {}))
       lastPoints.set(norm(pid), pts);
-  const last_week =
-    lw && lastGames.length
-      ? {
-          week: lw,
-          games: lastGames,
-          top_performers: lastSides
-            .flatMap((s) =>
-              s.starters.map((p) => ({ ...p, rid: s.rid, teamName: s.team })),
-            )
-            .filter((p) => p.pts != null)
-            .sort((a, b) => b.pts - a.pts)
-            .slice(0, 12),
-          team_of_the_week: topSides[0]
-            ? {
-                rid: topSides[0].rid,
-                name: topSides[0].team,
-                pts: topSides[0].pts,
-              }
-            : null,
-          blowout: [...lastGames].sort((a, b) => b.margin - a.margin)[0],
-          nail_biter: [...lastGames].sort((a, b) => a.margin - b.margin)[0],
-          average: round(
-            lastSides.reduce((s, t) => s + t.pts, 0) /
-              Math.max(1, lastSides.length),
-          ),
-        }
-      : null;
+  const last_week = lw ? buildWeekRecord(lastRows, lw) : null;
   const nextGames = makeGames(currentRows, true);
   const status =
     lw >= matchupWeek
@@ -569,6 +574,11 @@ export async function buildPayload() {
   // alive (final phase) so deep links like #story/w2-slate survive rollover.
   payload.slate = slateArticles(payload);
   payload.slate_final = slateFinalArticles(payload);
+  // The article archive: every completed regular-season week of the current
+  // season, re-derived deterministically from the same completed matchup
+  // rows (final phase). Rebuilt on every refresh, so it can never drift
+  // from the box scores; nothing extra is stored.
+  payload.archive = archiveWeeks(payload, activeWeeks.map((w) => buildWeekRecord(completedRows[w - 1], w, true)).filter(Boolean));
   return payload;
 }
 
@@ -602,7 +612,7 @@ async function getPayload(env, ctx, { forceRequested = false } = {}) {
   const minSinceBuild = live ? LIVE_FORCE_MIN_MS : DAY_FORCE_MIN_MS;
   const lastBuild = Number(hit?.asof || 0);
   const force = forceRefreshDue(forceRequested, lastBuild, Date.now(), minSinceBuild);
-  if (hit && !force && Date.now() - hit.asof < ttl) return hit;
+  if (hit && !force && Date.now() - hit.asof < ttl) return withPublishedArticles(hit, env.XCF_KV);
   try {
     if (!building)
       building = buildPayload().finally(() => {
@@ -615,18 +625,18 @@ async function getPayload(env, ctx, { forceRequested = false } = {}) {
         env.XCF_KV.put("last_build_ts", String(payload.asof)),
       ]),
     );
-    return payload;
+    return withPublishedArticles(payload, env.XCF_KV);
   } catch (e) {
     console.error("League refresh failed:", String(e));
     if (hit)
-      return {
+      return withPublishedArticles({
         ...hit,
         stale: true,
         notices: [
           ...(hit.notices || []),
           "Refresh failed. Showing the last successfully fetched league data.",
         ],
-      };
+      }, env.XCF_KV);
     throw e;
   }
 }
@@ -678,6 +688,17 @@ export default {
         );
       }
     }
+    if (url.pathname === "/api/track") {
+      return trackView(req, env);
+    }
+    if (url.pathname === "/api/views") {
+      if (!["GET", "HEAD"].includes(req.method))
+        return new Response("Method not allowed", {
+          status: 405,
+          headers: { Allow: "GET, HEAD" },
+        });
+      return viewsSummary(env);
+    }
     if (url.pathname.startsWith("/api/"))
       return new Response("Not found", { status: 404 });
 
@@ -689,7 +710,7 @@ export default {
     if (deep) {
       return Response.redirect(`${url.origin}/#${deep[1]}/${deep[2]}`, 308);
     }
-    const view = url.pathname.match(/^\/(home|matchups|standings|teams|players|injuries|waivers|history|main)\/?$/);
+    const view = url.pathname.match(/^\/(home|matchups|standings|teams|players|injuries|waivers|history|archive|main)\/?$/);
     if (view) {
       return Response.redirect(`${url.origin}/#${view[1]}`, 308);
     }

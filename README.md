@@ -86,7 +86,7 @@ pre-rebuild baseline in `qa/before/`.
   once per 10 min (KV key `last_build_ts`).
 - The payload cache key includes both the `BUILD` const and the imported player-bundle timestamp,
   so a metadata deployment cannot reuse a payload generated with the prior static bundle.
-  Bump `BUILD` in `src/index.js` after code changes that alter payload shape, and bump the `?v=`
+  Bump `BUILD` in `src/build.js` after code changes that alter payload shape, and bump the `?v=`
   query on `styles.css` / `app.js` in `index.html` so returning phones pick up new assets.
 
 ## Weekly league digest (Discord)
@@ -128,9 +128,15 @@ to the public league payload, nothing is invented.
   and **Sunday 23:00 ET** (`0 23 * * 0`, `xclub_slate_final.py`), the latter waiting up to 150 min
   for the slate (incl. MNF) to fully score before posting the final pack. Both are silent when
   there is no slate / it has not finalized.
-- **Why no build/deploy per article:** the articles are computed live by the Worker on each
-  `/api/data` refresh, so the 4pm queue and the late-Sunday refresh are the same pipeline — no
-  interactive agent step, no per-article deploy. The cron jobs only announce + deep-link.
+- **Why no build/deploy per article:** the Sunday slate articles are computed live by the Worker on each
+  `/api/data` refresh, so the queue and final pack are the same pipeline — no per-article deploy.
+  The slate cron jobs only announce + deep-link.
+
+## Article archive and page-view counters
+- `GET /api/data` reconstructs a current-season archive for each completed regular-season week from that week's Sleeper matchup rows. Week-end standings and the draft ledger are recomputed against that week's actual points. Historical articles are source-based reconstructions, not frozen copies of their original releases; only completed weeks are filed.
+- The Archive tab links to week-qualified stories; deep links resolve across rollovers. A persisted satire edition is merged into the current feed and archive without replacing scores or changing prior editions.
+- Page views use same-origin `POST /api/track` and `GET /api/views`, stored in the existing `XCF_KV` namespace as daily page/week aggregates. No cookies, IP addresses, third-party tracker, or visitor ID are stored. The counters expire after 16 days and are explicitly approximate (KV read/modify/write is not a transactional increment; concurrent visits can undercount).
+- **Wednesday waiver edition:** `scripts/publish_waiver_article.mjs` publishes one Onion-style story from verified completed Sleeper claims for the current Toronto calendar day, at most once per league week. It reports no story if the feed has no qualifying claims. The `no_agent` Hermes job `XClub Waiver Dispatch` runs the native Python wrapper `scripts/xclub_waiver_publish.py` at 9:15 AM ET Wednesday, after the existing waiver review; it announces the URL only after KV and production API read-back succeed. It refuses stale/wrong-build feeds and never overwrites an existing edition.
 
 ## Sleeper API notes (verified 2026-09-16)
 - League is standard scoring → use `pts_std` in stats/projections.

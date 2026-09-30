@@ -676,6 +676,174 @@ export function slateFinalArticles(d) {
   return slateDesk({ week: lw.week, status: "complete", games: lw.games }, d, "final");
 }
 
+export function standingsThroughWeeks(teams, completedRows, throughWeek) {
+  const snapshot = Object.values(teams || {}).map((team) => ({
+    ...team, wins: 0, losses: 0, ties: 0, fpts: 0, pa: 0,
+  }));
+  const byRid = new Map(snapshot.map((team) => [String(team.rid), team]));
+  const weeks = Array.isArray(completedRows) ? completedRows : [];
+  for (let i = 0; i < Math.min(Number(throughWeek) || 0, weeks.length); i++) {
+    for (const [a, b] of pairGames(weeks[i])) {
+      const ta = byRid.get(String(a.roster_id));
+      const tb = byRid.get(String(b.roster_id));
+      if (!ta || !tb) continue;
+      const pa = scoreOf(a);
+      const pb = scoreOf(b);
+      ta.fpts = round(ta.fpts + pa);
+      ta.pa = round(ta.pa + pb);
+      tb.fpts = round(tb.fpts + pb);
+      tb.pa = round(tb.pa + pa);
+      if (pa > pb) { ta.wins++; tb.losses++; }
+      else if (pb > pa) { tb.wins++; ta.losses++; }
+      else { ta.ties++; tb.ties++; }
+    }
+  }
+  return rankStandings(snapshot);
+}
+
+/**
+ * Durable article archive.
+ *
+ * The live payload only carries the single most recent completed week
+ * (`last_week` + `slate_final`); everything older vanishes on rollover.
+ * The archive re-derives each completed regular-season week's final article
+ * pack from the same completed matchup rows the live payload already uses,
+ * through the same deterministic "final"-phase pipeline — so each archived
+ * pack is a source-based reconstruction of that week's coverage, not a frozen
+ * copy of the original release.
+ * Nothing is stored and nothing is invented: the pack is rebuilt from the
+ * box scores on every refresh and therefore cannot drift from them.
+ *
+ * `week` is a completed-week record (week, games, standings, ...); `d` supplies
+ * the season, league metadata and draft data the editorial pipeline reads.
+ * Historical standings are reconstructed from matchup rows through that week,
+ * rather than borrowing the live season's current records.
+ */
+export function archivedWeekArticles(week, d) {
+  const games = Array.isArray(week?.games) ? week.games : [];
+  if (!week?.week || !games.length) return [];
+  const sides = games.flatMap((g) => [g.a, g.b]);
+  // Points for every rostered player in the archived week — used to recompute
+  // the draft ledger against the correct week (starter and bench scores).
+  const weekPoints = new Map();
+  for (const s of sides)
+    for (const p of [...(s.starters || []), ...(s.bench || [])])
+      if (p?.pid && p.pts != null) weekPoints.set(String(p.pid), p.pts);
+  let draft = d.draft || null;
+  if (draft && Array.isArray(draft.picks) && draft.picks.length) {
+    const picks = draft.picks.map((p) => ({
+      ...p,
+      pts: weekPoints.has(String(p.pid)) ? weekPoints.get(String(p.pid)) : null,
+    }));
+    draft = {
+      picks,
+      steals: picks
+        .filter((p) => p.round >= 8 && p.pts != null)
+        .sort((a, b) => b.pts - a.pts)
+        .slice(0, 5),
+      busts: picks
+        .filter((p) => p.round <= 3 && p.pts != null)
+        .sort((a, b) => a.pts - b.pts)
+        .slice(0, 5),
+      first_round: picks
+        .filter((p) => p.round === 1)
+        .sort((a, b) => a.pick_no - b.pick_no),
+    };
+  }
+  const lastWeek = {
+    week: week.week,
+    games,
+    top_performers:
+      Array.isArray(week.top_performers) && week.top_performers.length
+        ? week.top_performers
+        : sides
+            .flatMap((s) => s.starters.map((p) => ({ ...p, rid: s.rid, teamName: s.team })))
+            .filter((p) => p.pts != null)
+            .sort((a, b) => b.pts - a.pts)
+            .slice(0, 12),
+    team_of_the_week: week.team_of_the_week || null,
+  };
+  // An archived week is fully in the past: an empty upcoming slate keeps the
+  // pregame-only stories (next-week outlook, pregame bench chess, the decree)
+  // out of the pack, while "next up" copy resolves to the following week.
+  const env = {
+    season: d.season,
+    completed_week: d.completed_week,
+    current_week: d.current_week,
+    last_week: lastWeek,
+    next_week: { week: week.week + 1, status: "upcoming", games: [] },
+    transactions: [],
+    standings: Array.isArray(week.standings) ? week.standings : d.standings || [],
+    rivalries: [],
+    league: d.league,
+    players: [],
+    draft,
+  };
+  const weekLabel = `Week ${week.week} · Final`;
+  // Home-desk article IDs are shared across weeks (weekly-lead, ...), so the
+  // archived copies get week-qualified IDs; their deep links (#story/w2-...)
+  // stay unique and never collide with the live week's same-titled story.
+  const home = buildEditorial(env).map((a) => ({
+    ...a,
+    id: `w${week.week}-${a.id}`,
+    period: weekLabel,
+  }));
+  const slate = slateFinalArticles(env).map((a) => ({ ...a, period: weekLabel }));
+  return [...home, ...slate].filter(
+    (a) =>
+      a &&
+      typeof a.id === "string" &&
+      typeof a.headline === "string" &&
+      typeof a.body === "string",
+  );
+}
+
+/** Final article packs for every completed week, newest week first. */
+export function archiveWeeks(d, weeks) {
+  const list = Array.isArray(weeks) ? weeks : [];
+  const regularEnd = Number(d?.league?.regular_end);
+  const maxWeek = Number.isInteger(regularEnd) && regularEnd >= 1
+    ? Math.min(18, regularEnd)
+    : 18;
+  return list
+    .map((w) => {
+      const week = Number(w?.week);
+      if (!Number.isFinite(week) || week < 1 || week > maxWeek) return null;
+      const articles = archivedWeekArticles(w, d);
+      return articles.length ? { week, season: d.season, articles } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.week - a.week);
+}
+
+/**
+ * Self-hosted page-view tracking (no cookies, no third parties, no
+ * identifiers): the client sends one small beacon per page per visit to
+ * POST /api/track; the Worker keeps a per-day counter in KV keyed by
+ * "page:league-week". The page is normalised to the known view set and the
+ * week is clamped to the season range so the key space stays bounded.
+ */
+export const TRACK_PAGES = [
+  "home",
+  "weekend",
+  "matchups",
+  "standings",
+  "teams",
+  "players",
+  "injuries",
+  "waivers",
+  "history",
+  "archive",
+  "story",
+  "team-page",
+  "matchup",
+];
+export function trackPageKey(page, week) {
+  const p = TRACK_PAGES.includes(page) ? page : "other";
+  const w = Number.isInteger(week) && week >= 1 && week <= 18 ? week : 0;
+  return `${p}:${w}`;
+}
+
 function slateDesk(nw, d, phaseOverride) {
   const week = nw.week;
   if (!week) return [];
@@ -1208,6 +1376,55 @@ function bakerDecree(d, add) {
   return true;
 }
 
+export function waiverDispatchArticle(d, day) {
+  const week = Number(d?.current_week);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day || "") || !Number.isInteger(week) || week < 2 || week > 18) return null;
+  const torontoDay = (ms) => {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Toronto", year: "numeric", month: "2-digit", day: "2-digit",
+    }).formatToParts(new Date(ms));
+    const part = (type) => parts.find((p) => p.type === type)?.value;
+    return `${part("year")}-${part("month")}-${part("day")}`;
+  };
+  // Sleeper files the Wednesday claim batch under the just-completed leg,
+  // not the upcoming matchup week. Date-gating avoids reprinting old claims.
+  const bids = (d.transactions || [])
+    .filter((t) => t.type === "waiver" && Number(t.week) === week - 1 &&
+      t.bid != null && Number.isInteger(Number(t.bid)) && Number(t.bid) >= 0 &&
+      t.adds?.some((p) => p?.name && p?.teamName) &&
+      Number.isFinite(Number(t.when)) && torontoDay(Number(t.when)) === day)
+    .sort((a, b) => Number(b.bid) - Number(a.bid));
+  if (!bids.length) return null;
+  const lead = bids[0];
+  const winner = lead.adds.find((p) => p?.name && p?.teamName);
+  const budget = Number(d.league?.faab) || 0;
+  const share = budget > 0 ? Math.round((Number(lead.bid) / budget) * 100) : null;
+  const headline = `${winner.teamName} Puts $${Number(lead.bid)} On ${winner.name}; League Budget Issues Formal Statement`;
+  const dek = `The biggest confirmed waiver bid this morning: $${Number(lead.bid)} for ${winner.name}${share != null ? `, or ${share}% of the $${budget} starting FAAB budget` : ""}. The figures are real; the bureaucracy is not.`;
+  const dropped = (lead.drops || []).map((p) => p.name).filter(Boolean);
+  const paragraphs = [
+    `${winner.teamName} acquired ${winner.name} on a completed $${Number(lead.bid)} waiver claim${dropped.length ? ` and dropped ${dropped.join(", ")}` : ""}. With ${share != null ? `${share}% of the league's starting FAAB budget` : "a recorded bid"} committed to one transaction, the waiver desk has reportedly requested a separate desk for the receipt. The desk is fictional; the transaction is not.`,
+  ];
+  for (const move of bids.slice(1, 4)) {
+    const p = move.adds.find((x) => x?.name && x?.teamName);
+    const drops = (move.drops || []).map((x) => x.name).filter(Boolean);
+    paragraphs.push(`${p.teamName} also won a completed claim on ${p.name} for $${Number(move.bid)}${drops.length ? `, releasing ${drops.join(", ")}` : ""}. The league's imaginary appropriations committee has declined to comment.`);
+  }
+  paragraphs.push(`These are completed ${day} claims recorded by Sleeper, not recommendations or pending bids. The public log does not show every losing offer or anyone's private reasoning. Satirical institutions and reactions are invented for effect; no real person is quoted.`);
+  return {
+    id: `w${week}-waiver-dispatch`,
+    tag: "The Waiver Desk",
+    headline,
+    dek,
+    body: paragraphs.join("\n\n"),
+    byline: "XClub • Waiver Desk",
+    period: `Week ${week} · Waiver edition`,
+    source_url: d.league?.url || "https://sleeper.com/leagues/1371971946459201536",
+    source_label: "Players, teams, and transaction details come from completed public Sleeper records. All Onion-style framing is satire; motives and quotes are not attributed.",
+    satire: true,
+  };
+}
+
 export function buildEditorial(d) {
   const articles = [];
   const url = d.league.url;
@@ -1388,26 +1605,7 @@ export function buildEditorial(d) {
       ],
     );
   }
-  const waiver = [...(d.transactions || [])]
-    .filter((t) => t.type === "waiver" && t.bid != null && t.adds?.length)
-    .sort((a, b) => b.bid - a.bid)[0];
-  if (waiver) {
-    const p = waiver.adds[0];
-    const pct = d.league.faab
-      ? Math.round((waiver.bid / d.league.faab) * 100)
-      : null;
-    add(
-      "waiver-notebook",
-      "On the wire",
-      `${p.teamName} spends $${waiver.bid} on ${p.name}`,
-      `${pct != null ? `${pct}% of the $${d.league.faab} starting budget. ` : ""}The largest completed bid in the displayed transaction window.`,
-      [
-        `${p.teamName} added ${p.name} for $${waiver.bid}${waiver.drops?.length ? ` and released ${waiver.drops.map((p) => p.name).join(", ")}` : ""}. This is a completed move, not a waiver recommendation or a pending claim.`,
-        `${pct != null ? `The bid used ${pct}% of the league's starting FAAB budget. ` : ""}That is different from the percentage of the manager's remaining budget at the time. The public transaction record does not establish the full set of losing bids, so it cannot tell us how much was necessary to win.`,
-        `The value of the move depends on whether ${p.name} earns useful starts. The players page separates rostered players from those available in this league; platform-wide popularity alone is not evidence that a player is still on this waiver wire.`,
-      ],
-    );
-  }
+
   const late = d.draft?.steals?.[0];
   if (late) {
     const comps = (d.draft.picks || []).filter(

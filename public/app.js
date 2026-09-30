@@ -1,4 +1,4 @@
-import { initialRoute, matchupPhase, projectionCoverage, projectionPair, resolveGameLink, thursdayGame } from "./view-models.js?v=20260928-onion-cover";
+import { initialRoute, matchupPhase, projectionCoverage, projectionPair, resolveGameLink, thursdayGame } from "./view-models.js?v=20260930-waiver-publish";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) =>
@@ -37,6 +37,14 @@ try {
 } catch {}
 const head = (text, sub = "") =>
   `<div class="section-heading"><h2>${esc(text)}</h2>${sub ? `<span class="small">${esc(sub)}</span>` : ""}</div>`;
+/** Find a published story: live editorial, the live slate queue, last
+ *  week's final queue, or any archived week's pack (newest week first). */
+const findArticle = (id) => {
+  for (const a of [...(DATA.articles || []), ...(DATA.slate || []), ...(DATA.slate_final || []), ...((DATA.archive || []).flatMap((w) => w.articles || []))]) {
+    if (a && a.id === id) return a;
+  }
+  return null;
+};
 const avatar = (url, name) =>
   `<span class="avatar" data-fallback="${esc((name || "?").trim().charAt(0))}">${url ? `<img src="${esc(url)}" loading="lazy" width="32" height="32" alt="">` : esc((name || "?").trim().charAt(0))}</span>`;
 const photo = (p) =>
@@ -621,14 +629,59 @@ function renderHistory(d) {
         "",
       )}</div></section>${d.draft ? `<section class="feature-row">${head("The draft ledger", `${d.season} draft · Week ${d.last_week?.week || "—"} points`)}<p class="context-note">One week's return is not a final draft grade. These are actual league player points, whether started or benched; missing scores stay blank.</p><div class="draft-grid">${draftGroup("Late-round returns", "Round 8 and later, ordered by weekly output.", d.draft.steals)}${draftGroup("A quiet week", "Lowest recorded scores from Rounds 1–3. Not a bust verdict.", d.draft.busts)}${draftGroup("The first round", "In draft order, not ranked against other positions.", d.draft.first_round)}</div></section>` : ""}`;
 }
+function renderArchive(d) {
+  const weeks = d.archive || [];
+  const box = $("view-archive");
+  if (!weeks.length) {
+    box.innerHTML = `${intro("The archive", "Every week, kept.", "No completed weeks yet. The first final slate will be filed here once the season's first week is fully scored.")}`;
+    return;
+  }
+  const title = "Every week, kept.";
+  const completedCount = weeks.filter((wk) => Number(wk.week) <= Number(d.completed_week)).length;
+  const currentEditions = weeks.filter((wk) => Number(wk.week) > Number(d.completed_week)).length;
+  const blurb = `${d.season} season · ${completedCount} completed regular-season week${completedCount === 1 ? "" : "s"}${currentEditions ? ` · ${currentEditions} current waiver edition${currentEditions === 1 ? "" : "s"}` : ""}. Final articles are reconstructed from each week's matchup results and standings; these are source-based editions, not frozen copies of the original releases.`;
+  box.innerHTML =
+    `${intro("The archive", title, blurb)}<div id="archiveViews" class="archive-views" hidden></div>` +
+    weeks
+      .map((wk) => {
+        const stories = wk.articles || [];
+        const cover = stories.find((a) => a.id === `w${wk.week}-weekly-lead`);
+        const complete = Number(wk.week) <= Number(d.completed_week);
+        const filed = complete
+          ? `Final edition reconstructed · ${stories.length} stories`
+          : "Waiver edition · matchup archive pending";
+        return `<section class="archive-week" aria-label="Week ${wk.week}">${head(`Week ${wk.week}`, filed)}${cover ? `<div class="archive-lead"><span class="eyebrow">Cover story</span><a href="#story/${esc(cover.id)}" data-story="${esc(cover.id)}">${esc(cover.headline)}</a></div>` : ""}<div class="story-grid">${stories.map((a) => storyCard(a)).join("")}</div></section>`;
+      })
+      .join("");
+  // Self-hosted page-view totals (approximate, no identifiers). Best-effort:
+  // the archive renders fully even if the counter is unavailable.
+  try {
+    fetch("/api/views", { headers: { accept: "application/json" } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((v) => {
+        if (!v || !(v.days || []).length) return;
+        const el = $("archiveViews");
+        if (!el) return;
+        const top = Object.entries(v.totals || {})
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5);
+        const pageName = (key) => {
+          const [page, week] = key.split(":");
+          const labels = { home: "Home", weekend: "Weekend", matchups: "Matchups", standings: "Standings", teams: "Teams", players: "Players", injuries: "Injuries", waivers: "Waivers", history: "History", archive: "Archive", story: "Stories", "team-page": "Team pages", matchup: "Matchups", other: "Other" };
+          return `${labels[page] || page}${Number(week) > 0 ? ` W${week}` : ""}`;
+        };
+        const oldest = (v.days || []).at(-1)?.day || "—";
+        el.innerHTML = `<p class="small">Page views since ${esc(oldest)} (approximate; self-hosted, no cookies): ${Number(v.total || 0).toLocaleString("en")} total · ${top.map(([k, n]) => `${esc(pageName(k))} ${n}`).join(" · ")}</p>`;
+        el.hidden = false;
+      })
+      .catch(() => {});
+  } catch {}
+}
 function showArticle(id) {
-  // Slate desk articles (the Sunday queue) live in DATA.slate, and last
-  // week's final queue in DATA.slate_final (deep links survive rollover).
-  const a = [
-    ...(DATA.articles || []),
-    ...(DATA.slate || []),
-    ...(DATA.slate_final || []),
-  ].find((x) => x.id === id);
+  // Slate desk articles (the Sunday queue) live in DATA.slate, last week's
+  // final queue in DATA.slate_final, and every earlier week's pack in
+  // DATA.archive (deep links survive any number of rollovers).
+  const a = findArticle(id);
   if (!a) {
     $("articleContent").innerHTML = `<span class="eyebrow">XClub archive</span><h1 id="articleTitle">Story unavailable</h1><p class="article-dek">This story is not included in the current archive. No replacement story or scores have been substituted.</p><div class="article-actions"><a href="#home">Back to Home</a></div>`;
     document.title = "Story unavailable | XClub Fantasy";
@@ -646,7 +699,7 @@ function showArticle(id) {
     ? `<img class="article-hero" src="${esc(a.hero.src)}" alt="${esc(a.hero.alt || a.headline)}" width="280" height="280">`
     : "";
   $("articleContent").innerHTML =
-    `${hero}<span class="eyebrow">${esc(a.tag)} · ${DATA.season}</span>${satireNote}<h1 id="articleTitle">${esc(a.headline)}</h1><p class="article-dek">${esc(a.dek)}</p><div class="article-byline">${esc(a.byline)} · Updated ${esc(date(DATA.asof))} ET</div><div class="article-body">${a.body
+    `${hero}<span class="eyebrow">${esc(a.tag)}${a.period ? ` · ${esc(a.period)}` : ` · ${DATA.season}`}</span>${satireNote}<h1 id="articleTitle">${esc(a.headline)}</h1><p class="article-dek">${esc(a.dek)}</p><div class="article-byline">${esc(a.byline)} · Updated ${esc(date(DATA.asof))} ET</div><div class="article-body">${a.body
       .split("\n\n")
       .map((p) => `<p>${esc(p)}</p>`)
       .join("")}</div><div class="article-source">${a.satire
@@ -662,6 +715,7 @@ function showArticle(id) {
 function route(scroll = true) {
   if (!DATA) return;
   const hash = initialRoute(location.hash, location.pathname);
+  trackPageView(trackViewKey(hash), Number(DATA.current_week) || 0);
   if (hash.startsWith("story/")) {
     showArticle(hash.slice(6));
     return;
@@ -670,7 +724,7 @@ function route(scroll = true) {
     const rid = hash.slice(5);
     if (renderTeamPage(DATA, rid)) {
       currentView = "teams";
-      for (const v of ["home", "weekend", "matchups", "standings", "teams", "players", "injuries", "waivers", "history"]) $(`view-${v}`).hidden = v !== "teams";
+      for (const v of ["home", "weekend", "matchups", "standings", "teams", "players", "injuries", "waivers", "history", "archive"]) $(`view-${v}`).hidden = v !== "teams";
       document.querySelectorAll("[data-nav]").forEach((a) => {
         if (a.dataset.nav === "teams") a.setAttribute("aria-current", "page");
         else a.removeAttribute("aria-current");
@@ -693,7 +747,7 @@ function route(scroll = true) {
         : `Week ${Number.isFinite(week) ? week : "?"}, matchup ${Number.isFinite(mid) ? mid : "?"}`;
       currentView = "matchups";
       $("view-matchups").innerHTML = `${intro("The scoreboard", "Matchup not available", "This feed only carries the latest completed slate and the current slate.")}<div class="empty" role="status">${esc(requested)} is not present in the current feed. No other week's score has been substituted.</div><p><a class="text-link" href="#matchups">View available matchups →</a></p>`;
-      for (const v of ["home", "weekend", "matchups", "standings", "teams", "players", "injuries", "waivers", "history"]) $(`view-${v}`).hidden = v !== "matchups";
+      for (const v of ["home", "weekend", "matchups", "standings", "teams", "players", "injuries", "waivers", "history", "archive"]) $(`view-${v}`).hidden = v !== "matchups";
       document.querySelectorAll("[data-nav]").forEach((a) => {
         if (a.dataset.nav === "matchups") a.setAttribute("aria-current", "page");
         else a.removeAttribute("aria-current");
@@ -706,7 +760,7 @@ function route(scroll = true) {
     matchMode = resolved.source;
     const game = resolved.game;
     renderMatchups(DATA);
-    for (const v of ["home", "weekend", "matchups", "standings", "teams", "players", "injuries", "waivers", "history"]) $(`view-${v}`).hidden = v !== "matchups";
+    for (const v of ["home", "weekend", "matchups", "standings", "teams", "players", "injuries", "waivers", "history", "archive"]) $(`view-${v}`).hidden = v !== "matchups";
     document.querySelectorAll("[data-nav]").forEach((a) => {
       if (a.dataset.nav === "matchups") a.setAttribute("aria-current", "page");
       else a.removeAttribute("aria-current");
@@ -728,20 +782,58 @@ function route(scroll = true) {
     $("articleDialog").close();
     document.body.classList.remove("modal-open");
   }
-  const valid = ["home", "weekend", "matchups", "standings", "teams", "players", "injuries", "waivers", "history"];
+  const valid = ["home", "weekend", "matchups", "standings", "teams", "players", "injuries", "waivers", "history", "archive"];
   currentView = valid.includes(hash) ? hash : "home";
   for (const view of valid) $(`view-${view}`).hidden = view !== currentView;
   document.querySelectorAll("[data-nav]").forEach((a) => {
     if (a.dataset.nav === currentView) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   });
-  document.title = `${{ home: "The league, covered", weekend: "Weekend hype", matchups: "Scores & matchups", standings: "Standings", teams: "Team pages", players: "Players", injuries: "Injury report", waivers: "Waivers & transactions", history: "League history" }[currentView]} | XClub Fantasy`;
+  document.title = `${{ home: "The league, covered", weekend: "Weekend hype", matchups: "Scores & matchups", standings: "Standings", teams: "Team pages", players: "Players", injuries: "Injury report", waivers: "Waivers & transactions", history: "League history", archive: "Article archive" }[currentView]} | XClub Fantasy`;
   if (scroll) window.scrollTo({ top: 0, behavior: "instant" });
 }
 function closeArticle() {
   history.replaceState(null, "", returnHash);
   route(false);
   if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+}
+// ---- Page-view counter (self-hosted, no cookies, no identifiers) ----
+// A plain POST /api/track beacon, at most one per (page, session). The
+// server stores only page + day counts in KV — no IPs, no cookies, no
+// user data. Best-effort: failures are silent and never block the UI.
+let beaconedPages = new Set();
+try {
+  beaconedPages = new Set(JSON.parse(sessionStorage.getItem("xclub-beacon") || "[]"));
+} catch {}
+function trackPageView(key, week) {
+  const nWeek = Number.isInteger(week) && week >= 1 && week <= 18 ? week : 0;
+  const sessionKey = `${key}:${nWeek}`;
+  try {
+    if (beaconedPages.has(sessionKey)) return; // one count per page/week per session
+    beaconedPages.add(sessionKey);
+    sessionStorage.setItem("xclub-beacon", JSON.stringify([...beaconedPages]));
+  } catch {}
+  const payload = JSON.stringify({ page: key, week: nWeek });
+  try {
+    if (navigator.sendBeacon) {
+      if (navigator.sendBeacon("/api/track", new Blob([payload], { type: "application/json" }))) return;
+    }
+    fetch("/api/track", {
+      method: "POST",
+      keepalive: true,
+      headers: { "content-type": "application/json" },
+      body: payload,
+    }).catch(() => {});
+  } catch {}
+}
+function trackViewKey(hash) {
+  // Stable, low-cardinality keys only: plain views plus per-story slugs.
+  if (hash.startsWith("story/")) return "story";
+  if (hash.startsWith("team/")) return "team-page";
+  if (hash.startsWith("game/")) return "matchup";
+  if (["home", "weekend", "matchups", "standings", "teams", "players", "injuries", "waivers", "history", "archive"].includes(hash))
+    return hash;
+  return "home";
 }
 function render(d) {
   renderHome(d);
@@ -753,6 +845,7 @@ function render(d) {
   renderInjuries(d);
   renderWaivers(d);
   renderHistory(d);
+  renderArchive(d);
   $("edition").textContent = `${d.season} / Week ${d.current_week}`;
   $("navSeason").textContent =
     `${d.league.size} TEAMS · ${d.league.scoring.toUpperCase()} · ${d.league.qb}`;

@@ -2684,3 +2684,47 @@ dialog::backdrop {
   font-size: 12px;
   margin-top: 8px;
 }
+/* ---- Article archive ---- */
+.archive-week {
+  margin-top: 8px;
+  padding-top: 22px;
+}
+.archive-week .story-grid {
+  margin-top: 16px;
+  border-bottom: 3px solid var(--ink);
+}
+.archive-lead {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 16px 18px;
+  margin-top: 16px;
+}
+.archive-lead .eyebrow {
+  color: var(--gold);
+  margin-bottom: 8px;
+}
+.archive-lead a {
+  font: 800 21px/1.15 var(--cond);
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+  color: inherit;
+}
+.archive-lead a:hover {
+  color: var(--red);
+  text-decoration: none;
+}
+.archive-views {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+}
+.archive-views p {
+  margin: 0;
+}
+@media (min-width: 700px) {
+  .archive-week .story-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0 28px;
+  }
+}
