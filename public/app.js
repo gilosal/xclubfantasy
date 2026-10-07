@@ -695,8 +695,11 @@ function showArticle(id) {
   const hero = a.hero
     ? `<img class="article-hero" src="${esc(a.hero.src)}" alt="${esc(a.hero.alt || a.headline)}" width="280" height="280">`
     : "";
+  const timestamp = a.published_at
+    ? `Published ${date(a.published_at)}`
+    : `Updated ${date(DATA.asof)}`;
   $("articleContent").innerHTML =
-    `${hero}<span class="eyebrow">${esc(a.tag)}${a.period ? ` · ${esc(a.period)}` : ` · ${DATA.season}`}</span><h1 id="articleTitle">${esc(a.headline)}</h1><p class="article-dek">${esc(a.dek)}</p><div class="article-byline">${esc(a.byline)} · Updated ${esc(date(DATA.asof))} ET</div><div class="article-body">${a.body
+    `${hero}<span class="eyebrow">${esc(a.tag)}${a.period ? ` · ${esc(a.period)}` : ` · ${DATA.season}`}</span><h1 id="articleTitle">${esc(a.headline)}</h1><p class="article-dek">${esc(a.dek)}</p><div class="article-byline">${esc(a.byline)} · ${esc(timestamp)} ET</div><div class="article-body">${a.body
       .split("\n\n")
       .map((p) => `<p>${esc(p)}</p>`)
       .join("")}</div><div class="article-source">${a.column
